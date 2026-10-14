@@ -1,0 +1,18 @@
+# Build artifacts
+*.exe
+*.o
+*.obj
+*.a
+*.lib
+
+# Packaging directories
+dist/
+build/
+
+# IDE & OS files
+.vscode/
+.idea/
+*.swp
+*~
+Thumbs.db
+Desktop.ini

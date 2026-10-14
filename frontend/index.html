@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Adaptive CPU Scheduling Optimizer | University OS Demonstration</title>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <div class="app-layout">
+
+    <!-- ================================================================= -->
+    <!-- SECTION A: REAL-TIME SYSTEM STATUS (COMPACT HEADER)               -->
+    <!-- ================================================================= -->
+    <header class="system-status-header" id="section-a">
+      <div class="brand-row">
+        <div class="brand-info">
+          <div class="brand-badge">Operating Systems Research Demonstration</div>
+          <h1 class="brand-name">Adaptive CPU Scheduling Optimizer</h1>
+        </div>
+        <div class="connection-pill" id="conn-pill" title="Native Win32 C99 Server">
+          <span class="status-pulse-dot"></span>
+          <span id="conn-status-text">Backend Connected (127.0.0.1:8000)</span>
+        </div>
+      </div>
+
+      <!-- Exactly 4 clean, compact telemetry chips -->
+      <div class="status-chips-grid">
+        <!-- 1. CPU Hardware & Cores -->
+        <div class="status-chip" id="chip-cpu">
+          <div class="chip-caption">CPU Hardware &amp; Cores</div>
+          <div class="chip-primary" id="cpu-model-val">Detecting CPU...</div>
+          <div class="chip-secondary" id="cpu-cores-val">-- Logical Processors</div>
+        </div>
+
+        <!-- 2. CPU Utilization & Sparkline -->
+        <div class="status-chip" id="chip-usage">
+          <div class="chip-caption">Host CPU Utilization</div>
+          <div class="usage-row">
+            <span class="chip-primary chip-highlight" id="cpu-usage-val">--%</span>
+            <div class="sparkline-box">
+              <svg id="cpu-sparkline-svg" viewBox="0 0 100 24" preserveAspectRatio="none">
+                <path id="sparkline-path" d="" fill="none" stroke="currentColor" stroke-width="2" />
+              </svg>
+            </div>
+          </div>
+          <div class="chip-secondary" id="cpu-usage-desc">Real-time Win32 GetSystemTimes</div>
+        </div>
+
+        <!-- 3. Host Workload / Activity State -->
+        <div class="status-chip" id="chip-state">
+          <div class="chip-caption">Workload Activity State</div>
+          <div class="chip-primary" id="workload-state-val">Nominal Host Load</div>
+          <div class="chip-secondary" id="workload-policy-val">Adaptive Threshold: 150ms Aging</div>
+        </div>
+
+        <!-- 4. Execution Mode -->
+        <div class="status-chip" id="chip-mode">
+          <div class="chip-caption">Benchmark Contention</div>
+          <div class="chip-primary">Single Core 0 Affinity</div>
+          <div class="chip-secondary">Controlled Multiprogramming Queue</div>
+        </div>
+      </div>
+    </header>
+
+    <!-- ================================================================= -->
+    <!-- SECTION B: INTERACTIVE SCHEDULING EXPERIMENT (CENTERPIECE)        -->
+    <!-- ================================================================= -->
+    <main class="experiment-centerpiece" id="section-b">
+      
+      <!-- Problem Statement Banner -->
+      <div class="problem-statement-card">
+        <div class="problem-eyebrow">The Core Scheduling Problem</div>
+        <h2 class="problem-headline">
+          &ldquo;Heavy background jobs can delay short interactive tasks. Can adaptive CPU scheduling reduce that delay?&rdquo;
+        </h2>
+        <p class="problem-subtext">
+          Under non-preemptive arrival-order scheduling, short user requests are forced to wait for long-running batches to conclude (<strong>The Convoy Effect</strong>). 
+          Our proposed Adaptive Scheduler prioritizes latency-critical requests with <strong>bounded cooperative preemption (~15ms checkpoints)</strong> 
+          and uses <strong>dynamic aging</strong> to eliminate background task starvation.
+        </p>
+
+        <!-- Two Algorithms Contrasted Side-by-Side -->
+        <div class="algorithm-duel-grid">
+          <!-- Algorithm A -->
+          <div class="algo-card algo-fcfs">
+            <div class="algo-tag">Baseline Algorithm</div>
+            <h3 class="algo-name">First-Come, First-Served (FCFS)</h3>
+            <ul class="algo-points">
+              <li>Strict arrival-order execution queue</li>
+              <li>Non-preemptive dispatch within managed workload</li>
+              <li>Exhibits severe Convoy latency for arriving interactive tasks</li>
+              <li>Zero awareness of workload latency sensitivity</li>
+            </ul>
+          </div>
+
+          <!-- Algorithm B -->
+          <div class="algo-card algo-adaptive">
+            <div class="algo-tag algo-tag-featured">Proposed Solution</div>
+            <h3 class="algo-name">Adaptive Priority Scheduling with Aging</h3>
+            <ul class="algo-points">
+              <li>Workload-aware priority dispatch (Interactive &gt; Background)</li>
+              <li>Cooperative preemption checkpoints at bounded ~15ms intervals</li>
+              <li>Dynamic aging elevation: prevents background starvation</li>
+              <li>Directly informed by host CPU telemetry observations</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- One Big, Prominent Action Button -->
+        <div class="action-dock">
+          <button class="btn-run-experiment" id="btn-run" onclick="runLiveExperiment()">
+            <span class="btn-run-icon">▶</span>
+            <span class="btn-run-label">RUN LIVE EXPERIMENT</span>
+          </button>
+          <button class="btn-cancel-experiment" id="btn-cancel" onclick="cancelLiveExperiment()" disabled>
+            ✕ Cancel
+          </button>
+        </div>
+
+        <!-- Automatic 5-Step Stepper Progress Bar -->
+        <div class="stepper-box">
+          <div class="stepper-track">
+            <div class="step-node" id="step-node-1"><span class="step-num">1</span> Detect Hardware</div>
+            <div class="step-line"></div>
+            <div class="step-node" id="step-node-2"><span class="step-num">2</span> Calibrate CPU</div>
+            <div class="step-line"></div>
+            <div class="step-node" id="step-node-3"><span class="step-num">3</span> Execute FCFS</div>
+            <div class="step-line"></div>
+            <div class="step-node" id="step-node-4"><span class="step-num">4</span> Execute Adaptive</div>
+            <div class="step-line"></div>
+            <div class="step-node" id="step-node-5"><span class="step-num">5</span> Compare Results</div>
+          </div>
+          <div class="progress-bar-container">
+            <div class="progress-bar-bar" id="main-progress-bar" style="width: 0%;"></div>
+          </div>
+          <div class="stepper-status-msg" id="stepper-status-msg">
+            Click &ldquo;Run Live Experiment&rdquo; to benchmark both schedulers on your CPU.
+          </div>
+        </div>
+      </div>
+
+      <!-- Interactive Scheduling Visualization: Live Dispatcher Board -->
+      <div class="dispatch-visualizer-card">
+        <div class="visualizer-header">
+          <div class="visualizer-title-wrap">
+            <h3 class="visualizer-title">Live Dispatcher &amp; Execution Queue Activity</h3>
+            <span class="visualizer-sub">Tracking real C worker thread states and cooperative yield checkpoints</span>
+          </div>
+          <div class="legend-row">
+            <span class="legend-item"><span class="legend-swatch swatch-interactive"></span> Interactive Task (UI / Click)</span>
+            <span class="legend-item"><span class="legend-swatch swatch-compute"></span> Background Compute (Matrix)</span>
+            <span class="legend-item"><span class="legend-swatch swatch-memory"></span> Background Memory (Stride)</span>
+          </div>
+        </div>
+
+        <div class="queue-lanes-grid">
+          <!-- Lane 1: Ready Queue -->
+          <div class="queue-lane" id="lane-ready">
+            <div class="lane-header">
+              <span class="lane-title">Ready Queue (Arrived Work)</span>
+              <span class="lane-badge" id="ready-count-badge">0 Tasks</span>
+            </div>
+            <div class="lane-items-box" id="ready-items-container">
+              <div class="lane-empty-placeholder">Queue idle. Ready for experiment.</div>
+            </div>
+          </div>
+
+          <!-- Lane 2: Active Core Execution Slot -->
+          <div class="queue-lane lane-core" id="lane-core">
+            <div class="lane-header">
+              <span class="lane-title">Assigned CPU Core 0 (Executing)</span>
+              <span class="lane-badge badge-active" id="core-state-badge">Idle</span>
+            </div>
+            <div class="core-slot-display" id="core-slot-display">
+              <div class="core-unoccupied">
+                <span class="core-icon">⚡</span>
+                <span>Core Idle &bull; Awaiting Workload Dispatch</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Lane 3: Completed Tasks -->
+          <div class="queue-lane" id="lane-completed">
+            <div class="lane-header">
+              <span class="lane-title">Completed Workloads</span>
+              <span class="lane-badge" id="completed-count-badge">0 Finished</span>
+            </div>
+            <div class="lane-items-box" id="completed-items-container">
+              <div class="lane-empty-placeholder">No completed tasks yet.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+
+    <!-- ================================================================= -->
+    <!-- SECTION C: RESULTS, EXPLANATION & GANTT TIMELINE                  -->
+    <!-- ================================================================= -->
+    <section class="results-showcase" id="section-c">
+
+      <!-- Dynamic Academic Verdict Banner (Mandatory Format) -->
+      <div class="verdict-banner-card" id="verdict-banner">
+        <div class="verdict-icon-col">🎓</div>
+        <div class="verdict-content-col">
+          <div class="verdict-label">Empirical Scheduling Verdict</div>
+          <div class="verdict-primary-text" id="verdict-primary-text">
+            Run the live experiment above to generate the empirical performance comparison.
+          </div>
+          <div class="verdict-secondary-text" id="verdict-secondary-text">
+            Under standard Operating Systems theory, non-preemptive FCFS triggers the Convoy Effect. Adaptive Priority Scheduling mitigates queue blockage via cooperative checkpoints and eliminates starvation through aging.
+          </div>
+        </div>
+      </div>
+
+      <!-- Comparative Performance Cards & SVG Bar Chart -->
+      <div class="results-visual-grid">
+        
+        <!-- 3 Performance Metric Cards -->
+        <div class="metric-cards-col">
+          <!-- Card 1: Interactive Latency -->
+          <div class="result-metric-card" id="card-resp">
+            <div class="rm-header">
+              <span class="rm-label">Interactive Response Latency</span>
+              <span class="rm-sub">Time to first execution slice</span>
+            </div>
+            <div class="rm-numbers">
+              <div class="rm-val-row">
+                <span class="rm-algo-lbl">FCFS (Baseline):</span>
+                <span class="rm-num-val" id="val-fcfs-resp">-- ms</span>
+              </div>
+              <div class="rm-val-row">
+                <span class="rm-algo-lbl">Adaptive:</span>
+                <span class="rm-num-val rm-val-adaptive" id="val-adapt-resp">-- ms</span>
+              </div>
+            </div>
+            <div class="rm-badge-row">
+              <span class="rm-pill-badge" id="badge-resp-pct">-- %</span>
+            </div>
+          </div>
+
+          <!-- Card 2: Interactive Waiting Time -->
+          <div class="result-metric-card" id="card-wait">
+            <div class="rm-header">
+              <span class="rm-label">Interactive Queue Delay</span>
+              <span class="rm-sub">Total time blocked in ready queue</span>
+            </div>
+            <div class="rm-numbers">
+              <div class="rm-val-row">
+                <span class="rm-algo-lbl">FCFS:</span>
+                <span class="rm-num-val" id="val-fcfs-wait">-- ms</span>
+              </div>
+              <div class="rm-val-row">
+                <span class="rm-algo-lbl">Adaptive:</span>
+                <span class="rm-num-val rm-val-adaptive" id="val-adapt-wait">-- ms</span>
+              </div>
+            </div>
+            <div class="rm-badge-row">
+              <span class="rm-pill-badge" id="badge-wait-pct">-- %</span>
+            </div>
+          </div>
+
+          <!-- Card 3: Background Makespan -->
+          <div class="result-metric-card" id="card-make">
+            <div class="rm-header">
+              <span class="rm-label">Background Completion Time</span>
+              <span class="rm-sub">Total makespan for compute batches</span>
+            </div>
+            <div class="rm-numbers">
+              <div class="rm-val-row">
+                <span class="rm-algo-lbl">FCFS:</span>
+                <span class="rm-num-val" id="val-fcfs-make">-- ms</span>
+              </div>
+              <div class="rm-val-row">
+                <span class="rm-algo-lbl">Adaptive:</span>
+                <span class="rm-num-val rm-val-adaptive" id="val-adapt-make">-- ms</span>
+              </div>
+            </div>
+            <div class="rm-badge-row">
+              <span class="rm-pill-tradeoff" id="badge-make-pct">-- % Overhead</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Clear Visual Performance Comparison Chart (Native SVG) -->
+        <div class="comparison-chart-card">
+          <div class="chart-header">
+            <h4 class="chart-title">Visual Performance Comparison</h4>
+            <span class="chart-meta">FCFS vs Adaptive (Lower is Better for Latency)</span>
+          </div>
+          <div class="chart-body" id="comparison-chart-body">
+            <!-- Rendered dynamically by app.js -->
+            <div class="chart-empty-msg">Execute benchmark to generate performance chart.</div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Execution Timeline (Dual Gantt Tracks) -->
+      <div class="timeline-card">
+        <div class="timeline-header-row">
+          <div>
+            <h4 class="timeline-card-title">Microsecond Execution Traces (Gantt Timeline)</h4>
+            <div class="timeline-card-sub">Measured using Windows QueryPerformanceCounter (Sub-microsecond resolution)</div>
+          </div>
+          <div class="timeline-duration-badge" id="timeline-span-badge">Total Span: -- ms</div>
+        </div>
+
+        <!-- FCFS Track -->
+        <div class="gantt-row-container">
+          <div class="gantt-row-header">
+            <span class="gantt-row-title">Algorithm A: FCFS (Arrival Order &bull; Convoy Effect Visible)</span>
+            <span class="gantt-row-meta" id="fcfs-span-meta">-- ms</span>
+          </div>
+          <div class="gantt-track" id="fcfs-gantt-track">
+            <div class="gantt-empty-notice">Awaiting FCFS benchmark data...</div>
+          </div>
+        </div>
+
+        <!-- Adaptive Track -->
+        <div class="gantt-row-container">
+          <div class="gantt-row-header">
+            <span class="gantt-row-title">Algorithm B: Adaptive Priority + Cooperative Preemption + Aging</span>
+            <span class="gantt-row-meta" id="adaptive-span-meta">-- ms</span>
+          </div>
+          <div class="gantt-track" id="adaptive-gantt-track">
+            <div class="gantt-empty-notice">Awaiting Adaptive benchmark data...</div>
+          </div>
+        </div>
+
+        <!-- Time Axis -->
+        <div class="gantt-time-axis">
+          <span>0 ms</span>
+          <span id="axis-label-25">-- ms</span>
+          <span id="axis-label-50">-- ms</span>
+          <span id="axis-label-75">-- ms</span>
+          <span id="axis-label-100">-- ms</span>
+        </div>
+      </div>
+
+      <!-- Collapsible Technical Details Panel (Hidden by Default) -->
+      <details class="tech-details-drawer">
+        <summary class="drawer-summary">
+          <span class="drawer-summary-title">Technical Details &amp; Telemetry Evidence</span>
+          <span class="drawer-summary-hint">Click to inspect Win32 APIs, telemetry decisions &amp; transition logs</span>
+        </summary>
+        <div class="drawer-content">
+          <div class="drawer-grid">
+            <div class="drawer-col">
+              <h5>Host Telemetry Input to Adaptive Scheduler</h5>
+              <div class="telemetry-evidence-box" id="telem-evidence-text">
+                Waiting for experiment execution to record host telemetry context.
+              </div>
+            </div>
+            <div class="drawer-col">
+              <h5>Cooperative Yield Checkpoints &amp; Context Switches</h5>
+              <div class="telemetry-evidence-box" id="preemption-evidence-text">
+                Preemption details will appear after experiment completion.
+              </div>
+            </div>
+          </div>
+
+          <h5 style="margin-top: 14px;">Dispatcher Transition Log (Recent Slices)</h5>
+          <div class="transitions-table-wrap">
+            <table class="transitions-table">
+              <thead>
+                <tr>
+                  <th>Timestamp (ms)</th>
+                  <th>Task Name</th>
+                  <th>Transition</th>
+                  <th>Trigger / Reason</th>
+                </tr>
+              </thead>
+              <tbody id="transitions-tbody">
+                <tr><td colspan="4" style="text-align: center; color: #94a3b8;">No transitions recorded yet.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+
+    </section>
+
+    <!-- App Footer -->
+    <footer class="app-footer">
+      <span>Operating Systems Academic Demonstrator &bull; Native Win32 C99 Engine</span>
+      <span>Authentic QPC Hardware Timing &bull; Zero Simulated Delays &bull; Zero External Runtimes</span>
+    </footer>
+
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
