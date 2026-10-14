@@ -170,7 +170,11 @@ BOOL run_adaptive_benchmark(const WorkloadBatch* batch, DWORD_PTR affinity_mask,
             if (new_pri < 0) new_pri = 0; // Clamped at 0 (maximum priority)
             if (new_pri != w->effective_priority) {
                 char reason[64];
-                snprintf(reason, sizeof(reason), "Aging boost: Priority %d -> %d (waited %.0fms)", w->effective_priority, new_pri, wait_duration);
+                if (new_pri == 0) {
+                    snprintf(reason, sizeof(reason), "Aging boost: Pri %d -> %d (waited %.0fms - Starvation Intercept!)", w->effective_priority, new_pri, wait_duration);
+                } else {
+                    snprintf(reason, sizeof(reason), "Aging boost: Priority %d -> %d (waited %.0fms)", w->effective_priority, new_pri, wait_duration);
+                }
                 log_transition(out, elapsed_ms, w->def.id, w->def.name, STATE_READY, STATE_READY, reason);
                 w->effective_priority = new_pri;
             }

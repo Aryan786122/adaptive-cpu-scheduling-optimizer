@@ -82,13 +82,34 @@
       <div class="capture-panel-card">
         <div class="capture-panel-top">
           <div class="capture-panel-info">
-            <h3 class="panel-subtitle">Windows Active Process Telemetry</h3>
-            <span class="panel-meta">Top active foreground and background tasks competing for CPU cycles:</span>
+            <h3 class="panel-subtitle">Windows Active Process &amp; Browser Telemetry</h3>
+            <span class="panel-meta">Sample live process CPU deltas from Windows APIs (GetSystemTimes &amp; Toolhelp32Snapshot):</span>
           </div>
-          <button class="btn-action-primary" id="btn-capture" onclick="startSystemCapture()">
-            <span class="btn-icon">⚡</span>
-            <span class="btn-label" id="btn-capture-label">Capture System Activity (5s Sample)</span>
-          </button>
+          <div class="capture-actions-group">
+            <button class="btn-action-primary" id="btn-capture" onclick="startSystemCapture(5)">
+              <span class="btn-icon">⚡</span>
+              <span class="btn-label" id="btn-capture-label">Capture System Activity (5s)</span>
+            </button>
+            <button class="btn-action-browser" id="btn-browser-capture" onclick="startBrowserActivityObservation()">
+              <span class="btn-icon">🌐</span>
+              <span class="btn-label" id="btn-browser-label">Observe Browser Activity (10s Window)</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Real Application Interactive Guidance (Requirement 1, 3, 5) -->
+        <div class="browser-prompt-banner" id="browser-prompt-banner" style="display: none;">
+          <div class="bp-icon">🌐</div>
+          <div class="bp-content">
+            <div class="bp-title">Real Application Workload Test Window (10 Seconds)</div>
+            <div class="bp-desc">
+              Open several new browser tabs right now in <strong>Chrome</strong> or <strong>Edge</strong> (or click below) to generate genuine renderer thread load!
+            </div>
+            <div class="bp-actions">
+              <button class="btn-open-tabs-sm" type="button" onclick="spawnBenchmarkTabs()">📑 Open 5 Local Test Tabs (about:blank)</button>
+              <span class="bp-sub">Safe local tabs &bull; Zero internet needed &bull; Genuine Windows OS processes</span>
+            </div>
+          </div>
         </div>
 
         <!-- Capture Progress Bar (visible during sampling) -->
@@ -97,17 +118,69 @@
           <div class="capture-progress-label" id="capture-progress-label">Sampling active Win32 process CPU deltas... (0%)</div>
         </div>
 
+        <!-- Real Browser Process Activity Card (Requirements 2, 4, 6, 8) -->
+        <div class="browser-activity-card" id="browser-activity-card" style="display: none;">
+          <div class="bac-header">
+            <div class="bac-title-row">
+              <span class="bac-pill">REAL APPLICATION WORKLOAD</span>
+              <span class="bac-title" id="bac-browser-name">Detected Browser Processes</span>
+            </div>
+            <span class="bac-summary-stat" id="bac-summary-stat">-- Processes Active</span>
+          </div>
+          <div class="bac-body">
+            <div class="bac-chips-grid" id="browser-processes-container"></div>
+            <div class="bac-disclaimer">
+              <strong>Academic Scope &amp; Operating System Grounding:</strong>
+              These are genuine Windows user-space processes (<code>chrome.exe</code> / <code>msedge.exe</code>) scheduled by the Windows NT kernel.
+              Our userspace experimental scheduler (Stages 2–4) uses the measured browser load to dynamically scale the contention factor and tune the cooperative aging threshold, directly demonstrating how background workloads impact interactive response time without claiming to replace the Windows kernel scheduler.
+            </div>
+          </div>
+        </div>
+
         <!-- Top 5 Active Processes Chips -->
         <div class="top-processes-grid" id="top-processes-container">
-          <div class="proc-chip-loading">Click &ldquo;Capture System Activity&rdquo; to sample top active Windows processes.</div>
+          <div class="proc-chip-loading">Click &ldquo;Capture System Activity&rdquo; or &ldquo;Observe Browser Activity&rdquo; to sample active Windows processes.</div>
         </div>
 
         <!-- Provenance / Policy Summary Banner -->
         <div class="provenance-summary-banner" id="capture-summary-banner">
           <span class="banner-icon">ℹ️</span>
           <span class="banner-text" id="capture-summary-text">
-            Baseline telemetry initialized. Click &ldquo;Capture System Activity&rdquo; to ground scheduling parameters in your computer's live load.
+            Baseline telemetry initialized. Click &ldquo;Capture System Activity&rdquo; or &ldquo;Observe Browser Activity&rdquo; to ground scheduling parameters in your computer's live load.
           </span>
+        </div>
+
+        <!-- How Real System Data Was Used (Requirement 4) -->
+        <div class="provenance-card" id="provenance-card">
+          <div class="provenance-header">
+            <span class="provenance-pill">TELEMETRY GROUNDING</span>
+            <span class="provenance-title">How Real Windows Telemetry Was Used</span>
+          </div>
+          <div class="provenance-metrics-grid">
+            <div class="prov-metric-item">
+              <span class="prov-lbl">Host CPU Load Sampled</span>
+              <span class="prov-val" id="prov-cpu-val">--%</span>
+              <span class="prov-sub">Win32 GetSystemTimes delta</span>
+            </div>
+            <div class="prov-metric-item">
+              <span class="prov-lbl">Workload Scaling Factor</span>
+              <span class="prov-val" id="prov-scale-val">1.00x</span>
+              <span class="prov-sub">1.0 + (CPU% / 100) × 0.35</span>
+            </div>
+            <div class="prov-metric-item">
+              <span class="prov-lbl">Selected Aging Threshold</span>
+              <span class="prov-val" id="prov-aging-val">150 ms</span>
+              <span class="prov-sub">≤35% CPU: 150ms | >35%: 120ms</span>
+            </div>
+            <div class="prov-metric-item">
+              <span class="prov-lbl">Preemption Checkpoint</span>
+              <span class="prov-val" id="prov-checkpoint-val">~15 ms</span>
+              <span class="prov-sub">Calibrated loop stride</span>
+            </div>
+          </div>
+          <div class="prov-decision-text" id="prov-decision-text">
+            Sample host activity above to ground workload duration and adaptive aging parameters in live system measurements.
+          </div>
         </div>
       </div>
     </section>
@@ -147,13 +220,14 @@
           </div>
         </div>
 
-        <!-- Intensity Selector -->
+        <!-- Scenario & Intensity Selector (Requirements 2 & 7) -->
         <div class="ctrl-group">
-          <label class="ctrl-label">Workload Intensity:</label>
+          <label class="ctrl-label">Workload Scenario &amp; Intensity:</label>
           <div class="ctrl-button-group">
-            <button class="btn-toggle" id="btn-int-light" onclick="selectWorkloadIntensity('light')">Light (~1.5s)</button>
-            <button class="btn-toggle active" id="btn-int-balanced" onclick="selectWorkloadIntensity('balanced')">Balanced (~3.5s Recommended)</button>
-            <button class="btn-toggle" id="btn-int-heavy" onclick="selectWorkloadIntensity('heavy')">Heavy (~6.0s)</button>
+            <button class="btn-toggle active" id="btn-int-classroom" onclick="selectWorkloadIntensity('classroom')">🎓 Classroom Demo (~4.5s)</button>
+            <button class="btn-toggle" id="btn-int-starvation" onclick="selectWorkloadIntensity('starvation')">🛡️ Anti-Starvation Test (Burst Stream)</button>
+            <button class="btn-toggle" id="btn-int-light" onclick="selectWorkloadIntensity('light')">⚡ Light (~1.5s)</button>
+            <button class="btn-toggle" id="btn-int-heavy" onclick="selectWorkloadIntensity('heavy')">🏋️ Heavy (~6.5s)</button>
           </div>
         </div>
 
@@ -308,23 +382,48 @@
           </div>
         </div>
 
-        <!-- Replay & Timeline Scrubber Controls -->
-        <div class="replay-controls-row">
-          <div class="replay-buttons">
-            <button class="btn-ctrl-sm" id="btn-replay-play" onclick="toggleReplayPlay()">⏵ Play</button>
-            <button class="btn-ctrl-sm" id="btn-replay-step" onclick="stepReplayForward()">⏭ Step</button>
-            <button class="btn-ctrl-sm" id="btn-replay-reset" onclick="resetReplay()">↺ Reset</button>
+        <!-- Replay & Timeline Scrubber Controls (Requirement 3) -->
+        <div class="replay-controls-card">
+          <div class="replay-top-bar">
+            <div class="replay-algo-toggle-wrap">
+              <span class="replay-lbl">Replay Algorithm:</span>
+              <div class="ctrl-button-group">
+                <button class="btn-toggle active" id="btn-replay-fcfs" onclick="selectReplayAlgorithm('fcfs')">FCFS (Baseline)</button>
+                <button class="btn-toggle" id="btn-replay-adaptive" onclick="selectReplayAlgorithm('adaptive')">Adaptive (Preemptive)</button>
+              </div>
+            </div>
+            <div class="replay-speed-group">
+              <span class="replay-lbl">Speed:</span>
+              <button class="btn-speed" onclick="setReplaySpeed(0.25, this)">0.25x</button>
+              <button class="btn-speed active" onclick="setReplaySpeed(0.5, this)">0.5x</button>
+              <button class="btn-speed" onclick="setReplaySpeed(1.0, this)">1.0x</button>
+              <button class="btn-speed" onclick="setReplaySpeed(2.0, this)">2.0x</button>
+            </div>
           </div>
-          <div class="replay-slider-wrap">
-            <span class="replay-lbl">Replay Time:</span>
-            <input type="range" class="replay-slider" id="replay-time-slider" min="0" max="100" value="100" oninput="onReplayScrub(this.value)">
-            <span class="replay-time-display" id="replay-time-display">100%</span>
+
+          <div class="replay-controls-row">
+            <div class="replay-buttons">
+              <button class="btn-ctrl-sm" id="btn-replay-play" onclick="toggleReplayPlay()">⏵ Play</button>
+              <button class="btn-ctrl-sm" id="btn-replay-prev" onclick="stepReplayBackward()">⏮ Step Back</button>
+              <button class="btn-ctrl-sm" id="btn-replay-next" onclick="stepReplayForward()">⏭ Step Forward</button>
+              <button class="btn-ctrl-sm" id="btn-replay-reset" onclick="resetReplay()">↺ Reset</button>
+            </div>
+            <div class="replay-slider-wrap">
+              <span class="replay-lbl">Event Timeline:</span>
+              <input type="range" class="replay-slider" id="replay-time-slider" min="0" max="100" value="100" oninput="onReplayScrub(this.value)">
+              <span class="replay-time-display" id="replay-time-display">100%</span>
+            </div>
           </div>
-          <div class="replay-speed-group">
-            <span class="replay-lbl">Speed:</span>
-            <button class="btn-speed active" onclick="setReplaySpeed(0.5, this)">0.5x</button>
-            <button class="btn-speed" onclick="setReplaySpeed(1.0, this)">1.0x</button>
-            <button class="btn-speed" onclick="setReplaySpeed(2.0, this)">2.0x</button>
+
+          <!-- Live Event Callout (Inspector for Professor) -->
+          <div class="replay-event-callout" id="replay-event-callout">
+            <div class="callout-icon" id="callout-icon">🔍</div>
+            <div class="callout-content">
+              <div class="callout-headline" id="callout-headline">Replay Inspector Ready</div>
+              <div class="callout-text" id="callout-text">
+                Click &ldquo;Play&rdquo; or &ldquo;Step Forward&rdquo; to inspect task arrivals, ready queue waiting with dynamic aging, and preemption checkpoints in slow-motion.
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -438,6 +537,23 @@
           </div>
         </div>
 
+      </div>
+
+      <!-- Per-Task Latency vs Service Time Breakdown (Requirements 5 & 6) -->
+      <div class="task-breakdown-card" id="task-breakdown-card">
+        <div class="tb-header">
+          <div>
+            <h4 class="tb-title">Detailed Per-Task Timing Breakdown</h4>
+            <div class="tb-sub">Showing measured Arrival-to-First-Dispatch Delay distinctly from Actual CPU Service Time and Total Turnaround</div>
+          </div>
+          <div class="tb-legend">
+            <span class="tb-legend-item"><span class="tb-swatch swatch-wait"></span> Waiting for Dispatch (Ready Queue)</span>
+            <span class="tb-legend-item"><span class="tb-swatch swatch-exec"></span> Active CPU Execution (Service Time)</span>
+          </div>
+        </div>
+        <div class="tb-body" id="task-breakdown-body">
+          <div class="chart-empty-msg">Run both FCFS and Adaptive benchmarks to view the per-task delay vs service breakdown.</div>
+        </div>
       </div>
 
       <!-- Execution Timeline (Dual Gantt Tracks) -->

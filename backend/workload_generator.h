@@ -25,7 +25,7 @@ typedef struct {
 } ManagedTaskDef;
 
 typedef struct {
-    char profile_name[64];
+    char profile_name[128];
     int task_count;
     ManagedTaskDef tasks[MAX_WORKLOAD_TASKS];
     double total_work_ms;

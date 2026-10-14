@@ -59,6 +59,12 @@ typedef struct {
     TopProcessInfo top_processes[8];
     char host_activity_summary[512];
     int recommended_aging_threshold_ms;
+    // Real Browser Workload Tracking
+    int browser_process_count;
+    double browser_total_cpu;
+    char detected_browser_name[32];
+    TopProcessInfo browser_processes[8];
+    int top_browser_count;
 } SystemCaptureResult;
 
 BOOL telemetry_start_capture(int duration_seconds);

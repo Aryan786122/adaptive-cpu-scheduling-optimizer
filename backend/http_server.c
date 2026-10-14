@@ -152,6 +152,21 @@ static void append_run_result_json(JsonBuilder* jb, const AlgorithmRunResult* re
     json_int(jb, "total_preemptions", res->total_preemptions); json_raw(jb, ",");
     json_int(jb, "total_context_switches", res->total_context_switches); json_raw(jb, ",");
 
+    // Per-Worker Detailed Metrics (Arrival, First Dispatch, CPU Service, Waiting, Turnaround)
+    json_raw(jb, "\"workers\":[");
+    for (int i = 0; i < res->task_count; i++) {
+        if (i > 0) json_raw(jb, ",");
+        const ManagedWorker* w = &res->workers[i];
+        char esc[128];
+        json_escape(w->def.name, esc, sizeof(esc));
+        json_printf(jb, "{\"id\":%d,\"name\":\"%s\",\"type\":%d,\"pri\":%d,\"arr\":%.2f,\"disp\":%.2f,\"comp\":%.2f,\"cpu_ms\":%.2f,\"wait_ms\":%.2f,\"tat_ms\":%.2f,\"resp_ms\":%.2f,\"preempts\":%d}",
+                    w->def.id, esc, (int)w->def.type, w->effective_priority,
+                    w->actual_arrival_ms, w->first_dispatch_ms, w->completion_ms,
+                    w->total_cpu_time_ms, w->waiting_time_ms, w->turnaround_time_ms,
+                    w->response_time_ms, w->times_preempted);
+    }
+    json_raw(jb, "],");
+
     // Slices
     json_raw(jb, "\"slices\":[");
     for (int i = 0; i < res->slice_count; i++) {
@@ -186,7 +201,7 @@ static void handle_api_experiment_status(SOCKET sock) {
     experiment_get_status(&rep);
 
     JsonBuilder jb;
-    json_init(&jb, 16384);
+    json_init(&jb, 32768);
     json_raw(&jb, "{");
 
     json_int(&jb, "status_code", (int)rep.status); json_raw(&jb, ",");
@@ -288,7 +303,24 @@ static void handle_api_telemetry_capture_status(SOCKET sock) {
         json_printf(&jb, "{\"pid\":%u,\"name\":\"%s\",\"cpu_percent\":%.1f}",
                     (unsigned int)cap.top_processes[i].pid, esc_p, cap.top_processes[i].cpu_percent);
     }
+    json_raw(&jb, "],");
+
+    json_raw(&jb, "\"browser_workload\":{");
+    json_bool(&jb, "detected", cap.browser_process_count > 0); json_raw(&jb, ",");
+    json_str(&jb, "name", cap.detected_browser_name); json_raw(&jb, ",");
+    json_int(&jb, "process_count", cap.browser_process_count); json_raw(&jb, ",");
+    json_double(&jb, "total_cpu_percent", cap.browser_total_cpu, 1); json_raw(&jb, ",");
+    json_raw(&jb, "\"top_processes\":[");
+    for (int i = 0; i < cap.top_browser_count; i++) {
+        if (i > 0) json_raw(&jb, ",");
+        char esc_b[128];
+        json_escape(cap.browser_processes[i].name, esc_b, sizeof(esc_b));
+        json_printf(&jb, "{\"pid\":%u,\"name\":\"%s\",\"cpu_percent\":%.1f}",
+                    (unsigned int)cap.browser_processes[i].pid, esc_b, cap.browser_processes[i].cpu_percent);
+    }
     json_raw(&jb, "]}");
+
+    json_raw(&jb, "}");
 
     send_response(sock, 200, "application/json", jb.data, jb.length);
     json_free(&jb);

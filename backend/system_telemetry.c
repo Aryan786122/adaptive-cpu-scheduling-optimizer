@@ -433,6 +433,39 @@ static DWORD WINAPI capture_thread_proc(LPVOID lpParam) {
         s_capture_res.top_processes[i].cpu_percent = procs[i].cpu_pct;
     }
 
+    // Isolate real browser processes (Chrome / Edge / Firefox)
+    int b_count = 0;
+    double b_cpu_total = 0.0;
+    int top_b_count = 0;
+    char detected_browser[32] = "None Detected";
+
+    for (int i = 0; i < proc_count; i++) {
+        const char* pname = procs[i].name;
+        BOOL is_browser = (_stricmp(pname, "chrome.exe") == 0 ||
+                           _stricmp(pname, "msedge.exe") == 0 ||
+                           _stricmp(pname, "firefox.exe") == 0 ||
+                           _stricmp(pname, "brave.exe") == 0);
+        if (is_browser) {
+            b_count++;
+            b_cpu_total += procs[i].cpu_pct;
+            if (top_b_count < 8) {
+                s_capture_res.browser_processes[top_b_count].pid = procs[i].pid;
+                snprintf(s_capture_res.browser_processes[top_b_count].name, sizeof(s_capture_res.browser_processes[top_b_count].name), "%s", pname);
+                s_capture_res.browser_processes[top_b_count].cpu_percent = procs[i].cpu_pct;
+                top_b_count++;
+            }
+            if (_stricmp(pname, "chrome.exe") == 0) {
+                snprintf(detected_browser, sizeof(detected_browser), "Google Chrome");
+            } else if (_stricmp(pname, "msedge.exe") == 0 && strcmp(detected_browser, "Google Chrome") != 0) {
+                snprintf(detected_browser, sizeof(detected_browser), "Microsoft Edge");
+            }
+        }
+    }
+    s_capture_res.browser_process_count = b_count;
+    s_capture_res.browser_total_cpu = b_cpu_total;
+    s_capture_res.top_browser_count = top_b_count;
+    snprintf(s_capture_res.detected_browser_name, sizeof(s_capture_res.detected_browser_name), "%s", detected_browser);
+
     // Adaptive policy parameter derivation
     if (avg_cpu > 35.0) {
         s_capture_res.recommended_aging_threshold_ms = 120;

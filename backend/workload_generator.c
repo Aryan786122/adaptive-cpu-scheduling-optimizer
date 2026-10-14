@@ -142,26 +142,32 @@ void workload_prepare_lab(WorkloadBatch* out, const char* mode, const char* inte
     unsigned long long iters_per_ms = cal->iterations_per_ms;
     if (iters_per_ms == 0) iters_per_ms = 1000000;
 
-    double b1_ms = 1900.0;
-    double b2_ms = 1500.0;
+    double b1_ms = 2400.0;
+    double b2_ms = 1800.0;
     double i1_ms = 35.0;
-    double i1_arr = 400.0;
+    double i1_arr = 500.0;
+    BOOL is_starvation_scenario = FALSE;
 
-    if (intensity && strcmp(intensity, "light") == 0) {
+    if (intensity && (strcmp(intensity, "starvation") == 0 || strcmp(intensity, "anti_starvation") == 0)) {
+        is_starvation_scenario = TRUE;
+        b1_ms = 2000.0;
+        b2_ms = 1400.0;
+        strncpy(out->profile_name, "Anti-Starvation Validation (Burst Stream)", sizeof(out->profile_name) - 1);
+    } else if (intensity && strcmp(intensity, "light") == 0) {
         b1_ms = 800.0;
         b2_ms = 650.0;
         i1_ms = 25.0;
         i1_arr = 200.0;
         strncpy(out->profile_name, "Light Lab Workload (~1.5s)", sizeof(out->profile_name) - 1);
     } else if (intensity && strcmp(intensity, "heavy") == 0) {
-        b1_ms = 3200.0;
-        b2_ms = 2600.0;
+        b1_ms = 3500.0;
+        b2_ms = 2800.0;
         i1_ms = 45.0;
-        i1_arr = 600.0;
-        strncpy(out->profile_name, "Heavy Lab Workload (~6.0s)", sizeof(out->profile_name) - 1);
+        i1_arr = 700.0;
+        strncpy(out->profile_name, "Heavy Lab Workload (~6.5s)", sizeof(out->profile_name) - 1);
     } else {
-        // Balanced (recommended for demonstration so user can observe queue & click urgent button)
-        strncpy(out->profile_name, "Balanced Lab Workload (~3.5s)", sizeof(out->profile_name) - 1);
+        // Balanced Classroom Demo (recommended for demonstration so user can observe queue & click urgent button comfortably)
+        strncpy(out->profile_name, "Classroom Demo Workload (~4.5s)", sizeof(out->profile_name) - 1);
     }
 
     // Host telemetry calibration grounding
@@ -179,53 +185,106 @@ void workload_prepare_lab(WorkloadBatch* out, const char* mode, const char* inte
         double load_scale = 1.0 + (host_cpu / 100.0) * 0.35;
         b1_ms *= load_scale;
         b2_ms *= load_scale;
-        i1_arr = b1_ms * 0.25; // Mathematically guaranteed collision with B1's prime execution window
+        if (!is_starvation_scenario) {
+            i1_arr = b1_ms * 0.25; // Mathematically guaranteed collision with B1's prime execution window
+        }
 
-        snprintf(out->profile_name, sizeof(out->profile_name), "%s [Host: %.1f%% CPU, Aging: %dms]",
-                 (intensity && strcmp(intensity, "light") == 0) ? "Light" :
-                 (intensity && strcmp(intensity, "heavy") == 0) ? "Heavy" : "Balanced",
-                 host_cpu, aging_val);
+        const char* base_name = is_starvation_scenario ? "Anti-Starvation" :
+                                (intensity && strcmp(intensity, "light") == 0) ? "Light" :
+                                (intensity && strcmp(intensity, "heavy") == 0) ? "Heavy" : "Classroom Demo";
 
-        snprintf(b1_desc, sizeof(b1_desc), "CPU matrix loop (scaled %.2fx for %.1f%% host CPU, %d procs)",
-                 load_scale, host_cpu, observed_procs);
+        if (cap.browser_process_count > 0) {
+            snprintf(out->profile_name, sizeof(out->profile_name), "%s [%s: %d procs, %.1f%% CPU, Aging: %dms]",
+                     base_name, cap.detected_browser_name, cap.browser_process_count, cap.browser_total_cpu, aging_val);
+            snprintf(b1_desc, sizeof(b1_desc), "CPU matrix loop (scaled %.2fx for %.1f%% host CPU, %d %s procs)",
+                     load_scale, host_cpu, cap.browser_process_count, cap.detected_browser_name);
+        } else {
+            snprintf(out->profile_name, sizeof(out->profile_name), "%s [Host: %.1f%% CPU, Aging: %dms]",
+                     base_name, host_cpu, aging_val);
+            snprintf(b1_desc, sizeof(b1_desc), "CPU matrix loop (scaled %.2fx for %.1f%% host CPU, %d procs)",
+                     load_scale, host_cpu, observed_procs);
+        }
         snprintf(b2_desc, sizeof(b2_desc), "Memory stride pass (scaled %.2fx for %.1f%% host CPU)",
                  load_scale, host_cpu);
     }
 
-    // Task 1: B1 (Matrix Compute)
-    out->tasks[0].id = 1;
-    strncpy(out->tasks[0].name, "B1_Matrix_Compute", sizeof(out->tasks[0].name) - 1);
-    out->tasks[0].type = TASK_TYPE_BACKGROUND_CPU;
-    out->tasks[0].base_priority = 5;
-    out->tasks[0].target_duration_ms = b1_ms;
-    out->tasks[0].total_iterations = (unsigned long long)(b1_ms * (double)iters_per_ms);
-    out->tasks[0].arrival_offset_ms = 0.0;
-    strncpy(out->tasks[0].description, b1_desc, sizeof(out->tasks[0].description) - 1);
+    if (is_starvation_scenario) {
+        // Task 1: B1 (Matrix Compute)
+        out->tasks[0].id = 1;
+        strncpy(out->tasks[0].name, "B1_Matrix_Compute", sizeof(out->tasks[0].name) - 1);
+        out->tasks[0].type = TASK_TYPE_BACKGROUND_CPU;
+        out->tasks[0].base_priority = 5;
+        out->tasks[0].target_duration_ms = b1_ms;
+        out->tasks[0].total_iterations = (unsigned long long)(b1_ms * (double)iters_per_ms);
+        out->tasks[0].arrival_offset_ms = 0.0;
+        snprintf(out->tasks[0].description, sizeof(out->tasks[0].description), "%s", b1_desc);
 
-    // Task 2: B2 (Memory Stride)
-    out->tasks[1].id = 2;
-    strncpy(out->tasks[1].name, "B2_Memory_Stride", sizeof(out->tasks[1].name) - 1);
-    out->tasks[1].type = TASK_TYPE_BACKGROUND_MEM;
-    out->tasks[1].base_priority = 5;
-    out->tasks[1].target_duration_ms = b2_ms;
-    out->tasks[1].total_iterations = (unsigned long long)(b2_ms * (double)iters_per_ms);
-    out->tasks[1].arrival_offset_ms = 0.0;
-    strncpy(out->tasks[1].description, b2_desc, sizeof(out->tasks[1].description) - 1);
+        // Task 2: B2 (Memory Stride - Subject of Starvation Test)
+        out->tasks[1].id = 2;
+        strncpy(out->tasks[1].name, "B2_Memory_Stride", sizeof(out->tasks[1].name) - 1);
+        out->tasks[1].type = TASK_TYPE_BACKGROUND_MEM;
+        out->tasks[1].base_priority = 5;
+        out->tasks[1].target_duration_ms = b2_ms;
+        out->tasks[1].total_iterations = (unsigned long long)(b2_ms * (double)iters_per_ms);
+        out->tasks[1].arrival_offset_ms = 0.0;
+        snprintf(out->tasks[1].description, sizeof(out->tasks[1].description), "%s", b2_desc);
 
-    // Task 3: I1 (Interactive Request)
-    out->tasks[2].id = 3;
-    strncpy(out->tasks[2].name, "I1_Interactive_UI", sizeof(out->tasks[2].name) - 1);
-    out->tasks[2].type = TASK_TYPE_INTERACTIVE;
-    out->tasks[2].base_priority = 1;
-    out->tasks[2].target_duration_ms = i1_ms;
-    out->tasks[2].total_iterations = (unsigned long long)(i1_ms * (double)iters_per_ms);
-    out->tasks[2].arrival_offset_ms = i1_arr;
-    strncpy(out->tasks[2].description, "Short user request arriving while B1 executes", sizeof(out->tasks[2].description) - 1);
+        // Stream of 5 Higher-Priority Interactive Bursts (Priority 1) arriving back-to-back
+        for (int i = 0; i < 5; i++) {
+            int tid = 3 + i;
+            out->tasks[2 + i].id = tid;
+            snprintf(out->tasks[2 + i].name, sizeof(out->tasks[2 + i].name), "I%d_Stream_Burst", i + 1);
+            out->tasks[2 + i].type = TASK_TYPE_INTERACTIVE;
+            out->tasks[2 + i].base_priority = 1;
+            out->tasks[2 + i].target_duration_ms = 30.0;
+            out->tasks[2 + i].total_iterations = (unsigned long long)(30.0 * (double)iters_per_ms);
+            out->tasks[2 + i].arrival_offset_ms = 250.0 * (double)(i + 1); // 250ms, 500ms, 750ms, 1000ms, 1250ms
+            snprintf(out->tasks[2 + i].description, sizeof(out->tasks[2 + i].description),
+                     "Interactive burst %d testing priority aging against B2", i + 1);
+        }
 
-    out->task_count = 3;
-    out->background_count = 2;
-    out->interactive_count = 1;
-    out->total_work_ms = b1_ms + b2_ms + i1_ms;
+        out->task_count = 7;
+        out->background_count = 2;
+        out->interactive_count = 5;
+        out->total_work_ms = b1_ms + b2_ms + (5 * 30.0);
+    } else {
+        // Standard 3-task layout: B1, B2, I1 (plus any user-injected task)
+        // Task 1: B1 (Matrix Compute)
+        out->tasks[0].id = 1;
+        strncpy(out->tasks[0].name, "B1_Matrix_Compute", sizeof(out->tasks[0].name) - 1);
+        out->tasks[0].type = TASK_TYPE_BACKGROUND_CPU;
+        out->tasks[0].base_priority = 5;
+        out->tasks[0].target_duration_ms = b1_ms;
+        out->tasks[0].total_iterations = (unsigned long long)(b1_ms * (double)iters_per_ms);
+        out->tasks[0].arrival_offset_ms = 0.0;
+        snprintf(out->tasks[0].description, sizeof(out->tasks[0].description), "%s", b1_desc);
+
+        // Task 2: B2 (Memory Stride)
+        out->tasks[1].id = 2;
+        strncpy(out->tasks[1].name, "B2_Memory_Stride", sizeof(out->tasks[1].name) - 1);
+        out->tasks[1].type = TASK_TYPE_BACKGROUND_MEM;
+        out->tasks[1].base_priority = 5;
+        out->tasks[1].target_duration_ms = b2_ms;
+        out->tasks[1].total_iterations = (unsigned long long)(b2_ms * (double)iters_per_ms);
+        out->tasks[1].arrival_offset_ms = 0.0;
+        snprintf(out->tasks[1].description, sizeof(out->tasks[1].description), "%s", b2_desc);
+
+        // Task 3: I1 (Interactive Request)
+        out->tasks[2].id = 3;
+        strncpy(out->tasks[2].name, "I1_Interactive_UI", sizeof(out->tasks[2].name) - 1);
+        out->tasks[2].type = TASK_TYPE_INTERACTIVE;
+        out->tasks[2].base_priority = 1;
+        out->tasks[2].target_duration_ms = i1_ms;
+        out->tasks[2].total_iterations = (unsigned long long)(i1_ms * (double)iters_per_ms);
+        out->tasks[2].arrival_offset_ms = i1_arr;
+        snprintf(out->tasks[2].description, sizeof(out->tasks[2].description),
+                 "Short user request arriving while B1 executes");
+
+        out->task_count = 3;
+        out->background_count = 2;
+        out->interactive_count = 1;
+        out->total_work_ms = b1_ms + b2_ms + i1_ms;
+    }
 }
 
 int workload_inject_interactive_task(WorkloadBatch* batch, double arrival_offset_ms, const char* name) {
