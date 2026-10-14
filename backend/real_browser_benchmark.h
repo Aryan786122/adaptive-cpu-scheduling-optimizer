@@ -8,7 +8,7 @@ extern "C" {
 #endif
 
 #define MAX_BENCHMARK_TABS 16
-#define MAX_BG_WORKER_THREADS 8
+#define MAX_BG_WORKER_THREADS 32
 
 typedef enum {
     REAL_BENCH_IDLE = 0,

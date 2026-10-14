@@ -555,6 +555,7 @@ static void handle_api_real_browser_status(SOCKET sock) {
     json_int(&jb, "bg_thread_count", cur.bg_thread_count); json_raw(&jb, ",");
     json_str(&jb, "bg_priority_label", cur.bg_priority_label); json_raw(&jb, ",");
     json_double(&jb, "bg_work_duration_ms", cur.bg_work_duration_ms, 1); json_raw(&jb, ",");
+    json_double(&jb, "bg_hashes_completed", (double)cur.bg_total_hashes_completed, 0); json_raw(&jb, ",");
     json_double(&jb, "elapsed_ms", cur.bench_elapsed_ms, 1); json_raw(&jb, ",");
     json_str(&jb, "status_message", cur.status_message); json_raw(&jb, ",");
 

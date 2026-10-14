@@ -1374,6 +1374,12 @@ async function pollRealBrowserStatus() {
     const durEl = document.getElementById('rb-bg-duration-val');
     if (durEl) durEl.textContent = `${(data.bg_work_duration_ms || data.elapsed_ms || 0).toFixed(1)} ms`;
 
+    // Hashes completed
+    const hashesEl = document.getElementById('rb-bg-hashes-val');
+    if (hashesEl && data.bg_hashes_completed !== undefined) {
+      hashesEl.textContent = `${Math.round(data.bg_hashes_completed).toLocaleString()} hashes`;
+    }
+
     const badge = document.getElementById('rb-bg-priority-badge');
     if (badge && data.bg_priority_label) {
       badge.textContent = data.bg_priority_label;
@@ -1453,16 +1459,30 @@ function renderRealBrowserReport(rep) {
   if (!card) return;
   card.style.display = 'flex';
 
+  const verdict = document.getElementById('rb-verdict-badge');
+
   // Load Time
   const fcfsLoad = document.getElementById('rb-fcfs-load-val');
   const adaptLoad = document.getElementById('rb-adapt-load-val');
   const diffLoad = document.getElementById('rb-diff-load-badge');
   if (fcfsLoad) fcfsLoad.textContent = rep.has_fcfs ? `${rep.fcfs_avg_load_ms.toFixed(1)} ms (FCFS)` : '-- ms (FCFS)';
   if (adaptLoad) adaptLoad.textContent = rep.has_adaptive ? `${rep.adaptive_avg_load_ms.toFixed(1)} ms (Adaptive)` : '-- ms (Adaptive)';
+
+  const loadDiff = rep.load_improvement_pct;
   if (diffLoad) {
     if (rep.has_fcfs && rep.has_adaptive) {
-      diffLoad.textContent = `${rep.load_improvement_pct.toFixed(1)}% Faster Load`;
+      if (loadDiff >= 3.0) {
+        diffLoad.className = 'rb-diff-badge rb-diff-good';
+        diffLoad.textContent = `${loadDiff.toFixed(1)}% Faster Load (Adaptive)`;
+      } else if (loadDiff <= -3.0) {
+        diffLoad.className = 'rb-diff-badge rb-diff-worse';
+        diffLoad.textContent = `${Math.abs(loadDiff).toFixed(1)}% Slower Load (FCFS Won)`;
+      } else {
+        diffLoad.className = 'rb-diff-badge rb-diff-neutral';
+        diffLoad.textContent = `Within margin (${Math.abs(loadDiff).toFixed(1)}% diff)`;
+      }
     } else {
+      diffLoad.className = 'rb-diff-badge rb-diff-neutral';
       diffLoad.textContent = rep.has_fcfs ? 'FCFS Baseline Recorded' : 'Adaptive Run Recorded';
     }
   }
@@ -1473,10 +1493,22 @@ function renderRealBrowserReport(rep) {
   const diffEvt = document.getElementById('rb-diff-event-badge');
   if (fcfsEvt) fcfsEvt.textContent = rep.has_fcfs ? `${rep.fcfs_avg_event_ms.toFixed(1)} ms (FCFS)` : '-- ms (FCFS)';
   if (adaptEvt) adaptEvt.textContent = rep.has_adaptive ? `${rep.adaptive_avg_event_ms.toFixed(1)} ms (Adaptive)` : '-- ms (Adaptive)';
+
+  const latDiff = rep.latency_improvement_pct;
   if (diffEvt) {
     if (rep.has_fcfs && rep.has_adaptive) {
-      diffEvt.textContent = `${rep.latency_improvement_pct.toFixed(1)}% Lower Event Delay`;
+      if (latDiff >= 3.0) {
+        diffEvt.className = 'rb-diff-badge rb-diff-good';
+        diffEvt.textContent = `${latDiff.toFixed(1)}% Lower Event Delay (Adaptive)`;
+      } else if (latDiff <= -3.0) {
+        diffEvt.className = 'rb-diff-badge rb-diff-worse';
+        diffEvt.textContent = `${Math.abs(latDiff).toFixed(1)}% Higher Event Delay (FCFS Won)`;
+      } else {
+        diffEvt.className = 'rb-diff-badge rb-diff-neutral';
+        diffEvt.textContent = `Equivalent (${Math.abs(latDiff).toFixed(1)}% diff)`;
+      }
     } else {
+      diffEvt.className = 'rb-diff-badge rb-diff-neutral';
       diffEvt.textContent = 'Run other policy to compare';
     }
   }
@@ -1490,9 +1522,30 @@ function renderRealBrowserReport(rep) {
   if (diffBg) {
     if (rep.has_fcfs && rep.has_adaptive) {
       const sign = rep.bg_overhead_pct >= 0 ? '+' : '';
-      diffBg.textContent = `${sign}${rep.bg_overhead_pct.toFixed(1)}% Makespan Trade-Off`;
+      diffBg.textContent = `${sign}${rep.bg_overhead_pct.toFixed(1)}% Makespan Overhead`;
+      diffBg.className = 'rb-diff-badge rb-diff-overhead';
     } else {
+      diffBg.className = 'rb-diff-badge rb-diff-neutral';
       diffBg.textContent = 'Duration Tracked';
+    }
+  }
+
+  // Overall Dynamic Verdict Badge
+  if (verdict) {
+    if (rep.has_fcfs && rep.has_adaptive) {
+      if (loadDiff >= 3.0 && latDiff >= 2.0) {
+        verdict.className = 'rb-diff-badge rb-diff-good';
+        verdict.textContent = '✔ Adaptive Priority Won';
+      } else if (loadDiff <= -3.0 || latDiff <= -3.0) {
+        verdict.className = 'rb-diff-badge rb-diff-worse';
+        verdict.textContent = '⚠ FCFS Performed Better';
+      } else {
+        verdict.className = 'rb-diff-badge rb-diff-neutral';
+        verdict.textContent = '⚖ No Conclusive Winner (Margins Equivalent)';
+      }
+    } else {
+      verdict.className = 'rb-diff-badge rb-diff-neutral';
+      verdict.textContent = 'Awaiting Second Algorithm Run';
     }
   }
 
