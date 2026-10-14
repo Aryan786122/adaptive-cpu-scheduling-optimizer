@@ -41,6 +41,29 @@ void telemetry_init(void);
 void telemetry_get(SystemTelemetry* out);
 double telemetry_get_instant_cpu(void);
 
+typedef struct {
+    DWORD pid;
+    char name[64];
+    double cpu_percent;
+} TopProcessInfo;
+
+typedef struct {
+    BOOL is_capturing;
+    BOOL is_complete;
+    double progress_percent;
+    int duration_seconds;
+    double elapsed_seconds;
+    int total_processes_observed;
+    double avg_cpu_percent;
+    int top_process_count;
+    TopProcessInfo top_processes[8];
+    char host_activity_summary[512];
+    int recommended_aging_threshold_ms;
+} SystemCaptureResult;
+
+BOOL telemetry_start_capture(int duration_seconds);
+void telemetry_get_capture_status(SystemCaptureResult* out);
+
 #ifdef __cplusplus
 }
 #endif

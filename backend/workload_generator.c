@@ -132,3 +132,101 @@ void workload_generate_custom(WorkloadBatch* out, int num_bg, int num_interactiv
         out->total_work_ms += out->tasks[i].target_duration_ms;
     }
 }
+
+void workload_prepare_lab(WorkloadBatch* out, const char* mode, const char* intensity) {
+    if (!out) return;
+    memset(out, 0, sizeof(WorkloadBatch));
+
+    const MachineCalibration* cal = calibration_get();
+    unsigned long long iters_per_ms = cal->iterations_per_ms;
+    if (iters_per_ms == 0) iters_per_ms = 1000000;
+
+    double b1_ms = 1900.0;
+    double b2_ms = 1500.0;
+    double i1_ms = 35.0;
+    double i1_arr = 400.0;
+
+    if (intensity && strcmp(intensity, "light") == 0) {
+        b1_ms = 800.0;
+        b2_ms = 650.0;
+        i1_ms = 25.0;
+        i1_arr = 200.0;
+        strncpy(out->profile_name, "Light Lab Workload (~1.5s)", sizeof(out->profile_name) - 1);
+    } else if (intensity && strcmp(intensity, "heavy") == 0) {
+        b1_ms = 3200.0;
+        b2_ms = 2600.0;
+        i1_ms = 45.0;
+        i1_arr = 600.0;
+        strncpy(out->profile_name, "Heavy Lab Workload (~6.0s)", sizeof(out->profile_name) - 1);
+    } else {
+        // Balanced (recommended for demonstration so user can observe queue & click urgent button)
+        strncpy(out->profile_name, "Balanced Lab Workload (~3.5s)", sizeof(out->profile_name) - 1);
+    }
+
+    if (mode && strcmp(mode, "captured") == 0) {
+        strncat(out->profile_name, " [Host-Calibrated]", sizeof(out->profile_name) - strlen(out->profile_name) - 1);
+    }
+
+    // Task 1: B1 (Matrix Compute)
+    out->tasks[0].id = 1;
+    strncpy(out->tasks[0].name, "B1_Matrix_Compute", sizeof(out->tasks[0].name) - 1);
+    out->tasks[0].type = TASK_TYPE_BACKGROUND_CPU;
+    out->tasks[0].base_priority = 5;
+    out->tasks[0].target_duration_ms = b1_ms;
+    out->tasks[0].total_iterations = (unsigned long long)(b1_ms * (double)iters_per_ms);
+    out->tasks[0].arrival_offset_ms = 0.0;
+    strncpy(out->tasks[0].description, "Long CPU-bound arithmetic loop (Matrix)", sizeof(out->tasks[0].description) - 1);
+
+    // Task 2: B2 (Memory Stride)
+    out->tasks[1].id = 2;
+    strncpy(out->tasks[1].name, "B2_Memory_Stride", sizeof(out->tasks[1].name) - 1);
+    out->tasks[1].type = TASK_TYPE_BACKGROUND_MEM;
+    out->tasks[1].base_priority = 5;
+    out->tasks[1].target_duration_ms = b2_ms;
+    out->tasks[1].total_iterations = (unsigned long long)(b2_ms * (double)iters_per_ms);
+    out->tasks[1].arrival_offset_ms = 0.0;
+    strncpy(out->tasks[1].description, "Long memory-stride cache pressure worker", sizeof(out->tasks[1].description) - 1);
+
+    // Task 3: I1 (Interactive Request)
+    out->tasks[2].id = 3;
+    strncpy(out->tasks[2].name, "I1_Interactive_UI", sizeof(out->tasks[2].name) - 1);
+    out->tasks[2].type = TASK_TYPE_INTERACTIVE;
+    out->tasks[2].base_priority = 1;
+    out->tasks[2].target_duration_ms = i1_ms;
+    out->tasks[2].total_iterations = (unsigned long long)(i1_ms * (double)iters_per_ms);
+    out->tasks[2].arrival_offset_ms = i1_arr;
+    strncpy(out->tasks[2].description, "Short user request arriving while B1 executes", sizeof(out->tasks[2].description) - 1);
+
+    out->task_count = 3;
+    out->background_count = 2;
+    out->interactive_count = 1;
+    out->total_work_ms = b1_ms + b2_ms + i1_ms;
+}
+
+int workload_inject_interactive_task(WorkloadBatch* batch, double arrival_offset_ms, const char* name) {
+    if (!batch || batch->task_count >= MAX_WORKLOAD_TASKS) return -1;
+    const MachineCalibration* cal = calibration_get();
+    unsigned long long iters_per_ms = cal->iterations_per_ms;
+    if (iters_per_ms == 0) iters_per_ms = 1000000;
+
+    int new_id = batch->task_count + 1;
+    ManagedTaskDef* t = &batch->tasks[batch->task_count];
+    t->id = new_id;
+    if (name && *name) {
+        snprintf(t->name, sizeof(t->name), "%s", name);
+    } else {
+        snprintf(t->name, sizeof(t->name), "I%d_Urgent_Request", new_id);
+    }
+    t->type = TASK_TYPE_INTERACTIVE;
+    t->base_priority = 1;
+    t->target_duration_ms = 35.0;
+    t->total_iterations = (unsigned long long)(t->target_duration_ms * (double)iters_per_ms);
+    t->arrival_offset_ms = arrival_offset_ms;
+    snprintf(t->description, sizeof(t->description), "Dynamically injected urgent user request");
+
+    batch->task_count++;
+    batch->interactive_count++;
+    batch->total_work_ms += t->target_duration_ms;
+    return new_id;
+}
+

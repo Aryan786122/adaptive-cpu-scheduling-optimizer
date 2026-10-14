@@ -190,8 +190,8 @@ static void handle_api_experiment_status(SOCKET sock) {
     json_raw(&jb, "{");
 
     json_int(&jb, "status_code", (int)rep.status); json_raw(&jb, ",");
-    const char* st_names[] = { "IDLE", "CALIBRATING", "RUNNING_FCFS", "RUNNING_ADAPTIVE", "COMPLETED", "CANCELLED", "ERROR" };
-    json_str(&jb, "status_text", st_names[rep.status % 7]); json_raw(&jb, ",");
+    const char* st_names[] = { "IDLE", "CALIBRATING", "RUNNING_FCFS", "FCFS_DONE", "RUNNING_ADAPTIVE", "COMPLETED", "CANCELLED", "ERROR" };
+    json_str(&jb, "status_text", st_names[rep.status % 8]); json_raw(&jb, ",");
     json_str(&jb, "step_description", rep.current_step_description); json_raw(&jb, ",");
     json_double(&jb, "progress_percent", rep.progress_percent, 1); json_raw(&jb, ",");
     json_double(&jb, "elapsed_seconds", rep.elapsed_seconds, 1); json_raw(&jb, ",");
@@ -241,6 +241,138 @@ static void handle_api_experiment_status(SOCKET sock) {
 
     send_response(sock, 200, "application/json", jb.data, jb.length);
     json_free(&jb);
+}
+
+static void handle_api_telemetry_capture(SOCKET sock, const char* body) {
+    int duration = 5;
+    if (body) {
+        const char* p = strstr(body, "\"duration_seconds\":");
+        if (p) sscanf(p + 19, "%d", &duration);
+    }
+    if (duration < 1) duration = 5;
+    if (duration > 15) duration = 15;
+
+    if (telemetry_start_capture(duration)) {
+        char resp[256];
+        snprintf(resp, sizeof(resp), "{\"status\":\"started\",\"duration_seconds\":%d}", duration);
+        send_response(sock, 200, "application/json", resp, strlen(resp));
+    } else {
+        const char* resp = "{\"status\":\"busy\",\"message\":\"Capture already in progress.\"}";
+        send_response(sock, 400, "application/json", resp, strlen(resp));
+    }
+}
+
+static void handle_api_telemetry_capture_status(SOCKET sock) {
+    SystemCaptureResult cap;
+    telemetry_get_capture_status(&cap);
+
+    JsonBuilder jb;
+    json_init(&jb, 4096);
+    json_raw(&jb, "{");
+
+    json_bool(&jb, "is_capturing", cap.is_capturing); json_raw(&jb, ",");
+    json_bool(&jb, "is_complete", cap.is_complete); json_raw(&jb, ",");
+    json_double(&jb, "progress_percent", cap.progress_percent, 1); json_raw(&jb, ",");
+    json_int(&jb, "duration_seconds", cap.duration_seconds); json_raw(&jb, ",");
+    json_double(&jb, "elapsed_seconds", cap.elapsed_seconds, 1); json_raw(&jb, ",");
+    json_int(&jb, "total_processes", cap.total_processes_observed); json_raw(&jb, ",");
+    json_double(&jb, "avg_cpu_percent", cap.avg_cpu_percent, 1); json_raw(&jb, ",");
+    json_int(&jb, "aging_threshold_ms", cap.recommended_aging_threshold_ms); json_raw(&jb, ",");
+    json_str(&jb, "summary", cap.host_activity_summary); json_raw(&jb, ",");
+
+    json_raw(&jb, "\"top_processes\":[");
+    for (int i = 0; i < cap.top_process_count; i++) {
+        if (i > 0) json_raw(&jb, ",");
+        char esc_p[128];
+        json_escape(cap.top_processes[i].name, esc_p, sizeof(esc_p));
+        json_printf(&jb, "{\"pid\":%u,\"name\":\"%s\",\"cpu_percent\":%.1f}",
+                    (unsigned int)cap.top_processes[i].pid, esc_p, cap.top_processes[i].cpu_percent);
+    }
+    json_raw(&jb, "]}");
+
+    send_response(sock, 200, "application/json", jb.data, jb.length);
+    json_free(&jb);
+}
+
+static void handle_api_workload_prepare(SOCKET sock, const char* body) {
+    char mode[32] = "standard";
+    char intensity[32] = "balanced";
+
+    if (body) {
+        const char* p_mode = strstr(body, "\"mode\":");
+        if (p_mode) {
+            sscanf(p_mode + 7, " \"%31[^\"]\"", mode);
+        }
+        const char* p_int = strstr(body, "\"intensity\":");
+        if (p_int) {
+            sscanf(p_int + 12, " \"%31[^\"]\"", intensity);
+        }
+    }
+
+    experiment_prepare_workload(mode, intensity);
+
+    ExperimentReport rep;
+    experiment_get_status(&rep);
+
+    JsonBuilder jb;
+    json_init(&jb, 4096);
+    json_raw(&jb, "{");
+    json_str(&jb, "status", "prepared"); json_raw(&jb, ",");
+    json_str(&jb, "profile_name", rep.workload.profile_name); json_raw(&jb, ",");
+    json_int(&jb, "task_count", rep.workload.task_count); json_raw(&jb, ",");
+    json_double(&jb, "total_work_ms", rep.workload.total_work_ms, 1); json_raw(&jb, ",");
+
+    json_raw(&jb, "\"tasks\":[");
+    for (int i = 0; i < rep.workload.task_count; i++) {
+        if (i > 0) json_raw(&jb, ",");
+        char esc_n[128], esc_d[128];
+        json_escape(rep.workload.tasks[i].name, esc_n, sizeof(esc_n));
+        json_escape(rep.workload.tasks[i].description, esc_d, sizeof(esc_d));
+        json_printf(&jb, "{\"id\":%d,\"name\":\"%s\",\"type\":%d,\"priority\":%d,\"target_ms\":%.1f,\"arrival_offset\":%.1f,\"desc\":\"%s\"}",
+                    rep.workload.tasks[i].id, esc_n, (int)rep.workload.tasks[i].type,
+                    rep.workload.tasks[i].base_priority, rep.workload.tasks[i].target_duration_ms,
+                    rep.workload.tasks[i].arrival_offset_ms, esc_d);
+    }
+    json_raw(&jb, "]}");
+
+    send_response(sock, 200, "application/json", jb.data, jb.length);
+    json_free(&jb);
+}
+
+static void handle_api_experiment_run_fcfs(SOCKET sock) {
+    if (experiment_run_fcfs(0x1)) {
+        const char* resp = "{\"status\":\"started\",\"mode\":\"fcfs\",\"message\":\"FCFS benchmark executing on Core 0.\"}";
+        send_response(sock, 200, "application/json", resp, strlen(resp));
+    } else {
+        const char* resp = "{\"status\":\"busy\",\"message\":\"An experiment is already in progress.\"}";
+        send_response(sock, 400, "application/json", resp, strlen(resp));
+    }
+}
+
+static void handle_api_experiment_inject_task(SOCKET sock, const char* body) {
+    char name[64] = "I_Urgent_Request";
+    if (body) {
+        const char* p = strstr(body, "\"name\":");
+        if (p) sscanf(p + 7, " \"%63[^\"]\"", name);
+    }
+
+    if (experiment_inject_urgent_task(name)) {
+        const char* resp = "{\"status\":\"injected\",\"message\":\"Urgent request injected into active ready queue.\"}";
+        send_response(sock, 200, "application/json", resp, strlen(resp));
+    } else {
+        const char* resp = "{\"status\":\"rejected\",\"message\":\"Cannot inject task: FCFS benchmark is not actively running.\"}";
+        send_response(sock, 400, "application/json", resp, strlen(resp));
+    }
+}
+
+static void handle_api_experiment_run_adaptive(SOCKET sock) {
+    if (experiment_run_adaptive(0x1)) {
+        const char* resp = "{\"status\":\"started\",\"mode\":\"adaptive\",\"message\":\"Adaptive benchmark executing on identical workload.\"}";
+        send_response(sock, 200, "application/json", resp, strlen(resp));
+    } else {
+        const char* resp = "{\"status\":\"busy\",\"message\":\"An experiment is already in progress.\"}";
+        send_response(sock, 400, "application/json", resp, strlen(resp));
+    }
 }
 
 static void handle_api_experiment_run(SOCKET sock, const char* body) {
@@ -348,8 +480,20 @@ static DWORD WINAPI client_handler_thread(LPVOID lpParam) {
         serve_file(client, "app.js", "application/javascript");
     } else if (strcmp(path, "/api/telemetry") == 0) {
         handle_api_telemetry(client);
+    } else if (strcmp(path, "/api/telemetry/capture") == 0) {
+        handle_api_telemetry_capture(client, body);
+    } else if (strcmp(path, "/api/telemetry/capture_status") == 0) {
+        handle_api_telemetry_capture_status(client);
+    } else if (strcmp(path, "/api/workload/prepare") == 0) {
+        handle_api_workload_prepare(client, body);
     } else if (strcmp(path, "/api/experiment/status") == 0) {
         handle_api_experiment_status(client);
+    } else if (strcmp(path, "/api/experiment/run_fcfs") == 0) {
+        handle_api_experiment_run_fcfs(client);
+    } else if (strcmp(path, "/api/experiment/inject_task") == 0) {
+        handle_api_experiment_inject_task(client, body);
+    } else if (strcmp(path, "/api/experiment/run_adaptive") == 0) {
+        handle_api_experiment_run_adaptive(client);
     } else if (strcmp(path, "/api/experiment/run") == 0) {
         handle_api_experiment_run(client, body);
     } else if (strcmp(path, "/api/experiment/cancel") == 0) {

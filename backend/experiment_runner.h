@@ -12,10 +12,11 @@ typedef enum {
     EXP_STATUS_IDLE = 0,
     EXP_STATUS_CALIBRATING = 1,
     EXP_STATUS_RUNNING_FCFS = 2,
-    EXP_STATUS_RUNNING_ADAPTIVE = 3,
-    EXP_STATUS_COMPLETED = 4,
-    EXP_STATUS_CANCELLED = 5,
-    EXP_STATUS_ERROR = 6
+    EXP_STATUS_FCFS_DONE = 3,
+    EXP_STATUS_RUNNING_ADAPTIVE = 4,
+    EXP_STATUS_COMPLETED = 5,
+    EXP_STATUS_CANCELLED = 6,
+    EXP_STATUS_ERROR = 7
 } ExperimentStatus;
 
 typedef struct {
@@ -62,6 +63,10 @@ typedef struct {
 } ExperimentReport;
 
 void experiment_init(void);
+void experiment_prepare_workload(const char* mode, const char* intensity);
+BOOL experiment_run_fcfs(DWORD_PTR affinity_mask);
+BOOL experiment_inject_urgent_task(const char* name);
+BOOL experiment_run_adaptive(DWORD_PTR affinity_mask);
 BOOL experiment_start(DWORD_PTR affinity_mask, double scale_factor, BOOL use_contention_affinity);
 void experiment_cancel(void);
 void experiment_get_status(ExperimentReport* out);

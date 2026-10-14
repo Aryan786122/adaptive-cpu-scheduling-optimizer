@@ -51,7 +51,7 @@ static void log_transition(AlgorithmRunResult* res, double now_ms, int task_id, 
     }
 }
 
-BOOL run_fcfs_benchmark(const WorkloadBatch* batch, DWORD_PTR affinity_mask, AlgorithmRunResult* out, volatile LONG* cancel_flag) {
+BOOL run_fcfs_benchmark(WorkloadBatch* batch, DWORD_PTR affinity_mask, AlgorithmRunResult* out, UrgentInjectionSlot* injection_slot, volatile LONG* cancel_flag) {
     if (!batch || !out || batch->task_count <= 0) return FALSE;
     memset(out, 0, sizeof(AlgorithmRunResult));
     strncpy(out->algorithm_name, "First-Come, First-Served (FCFS)", sizeof(out->algorithm_name) - 1);
@@ -103,6 +103,38 @@ BOOL run_fcfs_benchmark(const WorkloadBatch* batch, DWORD_PTR affinity_mask, Alg
 
         QueryPerformanceCounter(&t_now);
         double elapsed_ms = qpc_diff_ms(t_bench_start, t_now);
+
+        // Check for manual urgent injection when queue is empty or between dispatches
+        if (injection_slot && InterlockedCompareExchange(&injection_slot->requested, 0, 1) == 1) {
+            int new_id = workload_inject_interactive_task(batch, elapsed_ms, injection_slot->name);
+            if (new_id > 0) {
+                int idx = batch->task_count - 1;
+                ManagedWorker* iw = &out->workers[idx];
+                iw->def = batch->tasks[idx];
+                iw->current_state = STATE_READY;
+                iw->effective_priority = 1;
+                iw->remaining_iterations = batch->tasks[idx].total_iterations;
+                iw->completed_iterations = 0;
+                iw->actual_arrival_ms = elapsed_ms;
+                iw->first_dispatch_ms = -1.0;
+                iw->completion_ms = -1.0;
+                iw->total_cpu_time_ms = 0.0;
+                iw->waiting_time_ms = 0.0;
+                iw->turnaround_time_ms = 0.0;
+                iw->response_time_ms = 0.0;
+                iw->times_preempted = 0;
+                iw->times_dispatched = 0;
+                iw->yield_flag = 0;
+                iw->terminate_flag = 0;
+                iw->target_affinity = affinity_mask;
+                iw->h_run_event = CreateEvent(NULL, FALSE, FALSE, NULL);
+                iw->h_yielded_event = CreateEvent(NULL, FALSE, FALSE, NULL);
+                iw->h_completed_event = CreateEvent(NULL, FALSE, FALSE, NULL);
+                iw->h_thread = CreateThread(NULL, 0, fcfs_worker_thread, iw, 0, NULL);
+                log_transition(out, elapsed_ms, iw->def.id, iw->def.name, STATE_NEW, STATE_READY, "Manual Urgent Arrival (FCFS)");
+                ready_queue[q_size++] = idx;
+            }
+        }
 
         // 1. Check for newly arriving tasks based on elapsed benchmark time
         for (int i = 0; i < batch->task_count; i++) {
@@ -166,6 +198,38 @@ BOOL run_fcfs_benchmark(const WorkloadBatch* batch, DWORD_PTR affinity_mask, Alg
             DWORD dwWait = WaitForSingleObject(sel_w->h_completed_event, 10);
             QueryPerformanceCounter(&t_now);
             elapsed_ms = qpc_diff_ms(t_bench_start, t_now);
+
+            // Check for manual urgent injection during task execution
+            if (injection_slot && InterlockedCompareExchange(&injection_slot->requested, 0, 1) == 1) {
+                int new_id = workload_inject_interactive_task(batch, elapsed_ms, injection_slot->name);
+                if (new_id > 0) {
+                    int idx = batch->task_count - 1;
+                    ManagedWorker* iw = &out->workers[idx];
+                    iw->def = batch->tasks[idx];
+                    iw->current_state = STATE_READY;
+                    iw->effective_priority = 1;
+                    iw->remaining_iterations = batch->tasks[idx].total_iterations;
+                    iw->completed_iterations = 0;
+                    iw->actual_arrival_ms = elapsed_ms;
+                    iw->first_dispatch_ms = -1.0;
+                    iw->completion_ms = -1.0;
+                    iw->total_cpu_time_ms = 0.0;
+                    iw->waiting_time_ms = 0.0;
+                    iw->turnaround_time_ms = 0.0;
+                    iw->response_time_ms = 0.0;
+                    iw->times_preempted = 0;
+                    iw->times_dispatched = 0;
+                    iw->yield_flag = 0;
+                    iw->terminate_flag = 0;
+                    iw->target_affinity = affinity_mask;
+                    iw->h_run_event = CreateEvent(NULL, FALSE, FALSE, NULL);
+                    iw->h_yielded_event = CreateEvent(NULL, FALSE, FALSE, NULL);
+                    iw->h_completed_event = CreateEvent(NULL, FALSE, FALSE, NULL);
+                    iw->h_thread = CreateThread(NULL, 0, fcfs_worker_thread, iw, 0, NULL);
+                    log_transition(out, elapsed_ms, iw->def.id, iw->def.name, STATE_NEW, STATE_READY, "Manual Urgent Arrival (Blocked by FCFS)");
+                    ready_queue[q_size++] = idx;
+                }
+            }
 
             // Record newly arriving tasks into ready queue
             for (int i = 0; i < batch->task_count; i++) {

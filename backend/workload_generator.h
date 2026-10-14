@@ -40,6 +40,12 @@ void workload_generate_standard(WorkloadBatch* out, double scale_factor);
 // Generates custom parameterized workload
 void workload_generate_custom(WorkloadBatch* out, int num_bg, int num_interactive, double bg_duration_ms, double interactive_duration_ms);
 
+// Generates the 3-task guided laboratory workload (B1, B2, I1)
+void workload_prepare_lab(WorkloadBatch* out, const char* mode, const char* intensity);
+
+// Dynamically injects an urgent interactive task into an existing batch
+int workload_inject_interactive_task(WorkloadBatch* batch, double arrival_offset_ms, const char* name);
+
 #ifdef __cplusplus
 }
 #endif
