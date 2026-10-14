@@ -35,7 +35,7 @@ try {
     # Launch standalone process on port 8098
     $smokePort = 8098
     Write-Host "[2/5] Launching standalone executable on port $smokePort..."
-    $proc = Start-Process -FilePath $exePath -ArgumentList "--port $smokePort --no-browser" -PassThru
+    $proc = Start-Process -FilePath $exePath -ArgumentList "--port $smokePort --no-browser" -WorkingDirectory $testDir -PassThru
     Start-Sleep -Seconds 2
 
     # Query telemetry
@@ -49,7 +49,7 @@ try {
 
     # Query index.html
     Write-Host "[4/5] Verifying static asset delivery from standalone instance..."
-    $htmlContent = Invoke-WebRequest -Uri "http://127.0.0.1:$smokePort/" -TimeoutSec 5
+    $htmlContent = Invoke-WebRequest -Uri "http://127.0.0.1:$smokePort/" -TimeoutSec 5 -UseBasicParsing
     if ($htmlContent.StatusCode -ne 200 -or -not ($htmlContent.Content -like "*Adaptive CPU Scheduling*")) {
         Write-Error "HTML content delivery verification failed!"
         exit 1
@@ -63,6 +63,10 @@ try {
     Write-Host ">>> PACKAGING SMOKE TEST PASSED SUCCESSFULLY! <<<"
 }
 finally {
+    if ($proc -and -not $proc.HasExited) {
+        Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Milliseconds 300
+    }
     if (Test-Path $testDir) {
         Remove-Item -Path $testDir -Recurse -Force -ErrorAction SilentlyContinue
     }
