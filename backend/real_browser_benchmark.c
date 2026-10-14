@@ -166,8 +166,8 @@ static DWORD WINAPI scheduler_watchdog_proc(LPVOID lpParam) {
 
         // Check if all tabs have reported
         if (reported >= target && target > 0) {
-            // Keep the browser visible for 2.0 seconds so professor inspects the finished tabs
-            Sleep(2000);
+            InterlockedExchange(&s_bg_running, 0);
+            Sleep(1200);
             cleanup_test_browser();
             break;
         }

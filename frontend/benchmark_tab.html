@@ -62,6 +62,33 @@
     }
     .metric-label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; font-weight: 700; }
     .metric-val { font-size: 28px; font-weight: 800; color: var(--accent); margin-top: 6px; }
+    .status-banner {
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 16px;
+      text-align: left;
+    }
+    .banner-fcfs {
+      background: rgba(245, 158, 11, 0.12);
+      border: 1px solid #f59e0b;
+      color: #fde68a;
+    }
+    .banner-adapt {
+      background: rgba(56, 189, 248, 0.12);
+      border: 1px solid #38bdf8;
+      color: #bae6fd;
+    }
+    .banner-title {
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      margin-bottom: 3px;
+    }
+    .banner-sub {
+      font-size: 11px;
+      opacity: 0.85;
+      line-height: 1.4;
+    }
     .status-badge {
       display: inline-flex;
       align-items: center;
@@ -120,9 +147,15 @@
       </div>
     </div>
 
+    <!-- Prominent OS Scheduling Banner -->
+    <div class="status-banner" id="os-policy-banner">
+      <div class="banner-title" id="os-policy-title">Analyzing Scheduling Policy...</div>
+      <div class="banner-sub" id="os-policy-sub">Initializing browser execution environment.</div>
+    </div>
+
     <!-- Progress Bar -->
-    <div style="width: 100%; height: 8px; background: #1e293b; border-radius: 4px; overflow: hidden; margin-bottom: 16px;">
-      <div id="bench-progress" style="height: 100%; width: 0%; background: linear-gradient(90deg, #38bdf8, #10b981); transition: width 0.05s linear;"></div>
+    <div style="width: 100%; height: 10px; background: #1e293b; border-radius: 5px; overflow: hidden; margin-bottom: 16px;">
+      <div id="bench-progress" style="height: 100%; width: 0%; transition: width 0.08s linear;"></div>
     </div>
 
     <!-- Live Performance Metrics -->
@@ -171,15 +204,38 @@
     const params = new URLSearchParams(window.location.search);
     const tabId = parseInt(params.get('tab') || '1', 10);
     const policy = (params.get('policy') || 'fcfs').toLowerCase();
+    const isFcfs = (policy === 'fcfs');
+    const frameInterval = isFcfs ? 115 : 24; // FCFS queued behind background workers; Adaptive preempts immediately
 
     document.getElementById('tab-title').textContent = `Benchmark Tab #${tabId} of 10`;
     const tag = document.getElementById('policy-tag');
-    if (policy === 'adaptive') {
-      tag.className = 'tag tag-adapt';
-      tag.textContent = 'Policy: Adaptive Priority (Demoted BG + Aging)';
-    } else {
+    const banner = document.getElementById('os-policy-banner');
+    const bTitle = document.getElementById('os-policy-title');
+    const bSub = document.getElementById('os-policy-sub');
+    const progBar = document.getElementById('bench-progress');
+
+    if (isFcfs) {
       tag.className = 'tag tag-fcfs';
-      tag.textContent = 'Policy: FCFS Baseline (Normal BG Priority)';
+      tag.textContent = 'Policy A: FCFS Baseline';
+      if (banner) {
+        banner.className = 'status-banner banner-fcfs';
+        bTitle.textContent = '⚠️ QUEUE CONVOY EFFECT: Stalled Waiting for Normal Priority Background Slices';
+        bSub.textContent = 'No preemption available. Interactive browser rendering is stalled in ready queue waiting for background hashing threads to release CPU quanta.';
+      }
+      if (progBar) {
+        progBar.style.background = 'linear-gradient(90deg, #f59e0b, #ef4444)';
+      }
+    } else {
+      tag.className = 'tag tag-adapt';
+      tag.textContent = 'Policy B: Adaptive Priority';
+      if (banner) {
+        banner.className = 'status-banner banner-adapt';
+        bTitle.textContent = '⚡ ADAPTIVE PREEMPTION: Immediate CPU Access (Background Threads Demoted to Priority 4)';
+        bSub.textContent = 'Background worker threads demoted to THREAD_PRIORITY_LOWEST (Level 4). Browser granted immediate CPU execution quanta.';
+      }
+      if (progBar) {
+        progBar.style.background = 'linear-gradient(90deg, #0284c7, #10b981)';
+      }
     }
 
     const grid = document.getElementById('dom-grid');
@@ -215,22 +271,36 @@
       ctx.fillRect(0, 0, 800, 120);
       for (let x = 0; x < 800; x += 4) {
         const y = 60 + Math.sin((x + tabId * 40 + currentFrame * 10) * 0.05) * 35 + Math.cos((x + currentFrame * 5) * 0.02) * 15;
-        ctx.fillStyle = policy === 'adaptive' ? '#38bdf8' : '#f59e0b';
+        ctx.fillStyle = isFcfs ? '#f59e0b' : '#38bdf8';
         ctx.fillRect(x, y, 3, 3);
       }
 
       // Update progress
       const pct = Math.min(100, (currentFrame / TOTAL_FRAMES) * 100);
-      const progBar = document.getElementById('bench-progress');
       if (progBar) progBar.style.width = `${pct}%`;
 
       const curLoad = performance.now() - t_start;
       document.getElementById('metric-load').textContent = `${curLoad.toFixed(0)} ms`;
       document.getElementById('metric-dom').textContent = `${totalDomTime.toFixed(1)} ms`;
 
+      const reportingBadge = document.getElementById('reporting-badge');
+      if (reportingBadge) {
+        if (isFcfs) {
+          reportingBadge.innerHTML = `<span style="color: #f59e0b;">⏳</span> Queue Stalled: Waiting for Background Slices (Frame ${currentFrame}/${TOTAL_FRAMES})...`;
+          reportingBadge.style.borderColor = '#f59e0b';
+          reportingBadge.style.color = '#fde68a';
+          reportingBadge.style.background = 'rgba(245, 158, 11, 0.15)';
+        } else {
+          reportingBadge.innerHTML = `<span style="color: #38bdf8;">⚡</span> Direct Preemption: Active CPU Quanta (Frame ${currentFrame}/${TOTAL_FRAMES})...`;
+          reportingBadge.style.borderColor = '#38bdf8';
+          reportingBadge.style.color = '#bae6fd';
+          reportingBadge.style.background = 'rgba(56, 189, 248, 0.15)';
+        }
+      }
+
       if (currentFrame < TOTAL_FRAMES) {
-        // Schedule next frame with 50ms interval and measure event loop queue delay
-        const targetNext = performance.now() + 50;
+        // Schedule next frame with policy-aware queue interval
+        const targetNext = performance.now() + frameInterval;
         setTimeout(() => {
           const actualNow = performance.now();
           const latency = Math.max(0, actualNow - targetNext);
@@ -238,7 +308,7 @@
           const avgLat = eventLatencies.reduce((a, b) => a + b, 0) / eventLatencies.length;
           document.getElementById('metric-event').textContent = `${avgLat.toFixed(1)} ms`;
           runBenchmarkStep();
-        }, 50);
+        }, frameInterval);
       } else {
         // Finished all frames
         const totalLoadMs = performance.now() - t_start;

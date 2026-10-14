@@ -1407,7 +1407,7 @@ async function pollRealBrowserStatus() {
         if (card) card.classList.add('loaded');
         if (status) {
           status.className = 'rb-tab-status done';
-          status.textContent = '✔ Rendered';
+          status.textContent = (data.policy === 'fcfs') ? '✔ Rendered (Queue Delayed)' : '✔ Rendered (Preempted)';
         }
         if (load) load.textContent = `${t.load_ms.toFixed(1)} ms`;
         if (dom) dom.textContent = `${t.dom_ms.toFixed(1)} ms`;
@@ -1546,6 +1546,45 @@ function renderRealBrowserReport(rep) {
     } else {
       verdict.className = 'rb-diff-badge rb-diff-neutral';
       verdict.textContent = 'Awaiting Second Algorithm Run';
+    }
+  }
+
+  // Dynamic Horizontal Timeline Comparison Bar Chart
+  const barFcfs = document.getElementById('rb-bar-fcfs');
+  const barAdapt = document.getElementById('rb-bar-adapt');
+  const barFcfsText = document.getElementById('rb-bar-fcfs-text');
+  const barAdaptText = document.getElementById('rb-bar-adapt-text');
+  const chartFcfsNote = document.getElementById('rb-chart-fcfs-note');
+  const chartAdaptNote = document.getElementById('rb-chart-adapt-note');
+
+  if (barFcfs && barAdapt) {
+    if (rep.has_fcfs && rep.has_adaptive) {
+      const maxLoad = Math.max(rep.fcfs_avg_load_ms, rep.adaptive_avg_load_ms, 1.0);
+      const fcfsPct = Math.min(100, Math.max(12, (rep.fcfs_avg_load_ms / maxLoad) * 100));
+      const adaptPct = Math.min(100, Math.max(12, (rep.adaptive_avg_load_ms / maxLoad) * 100));
+
+      barFcfs.style.width = `${fcfsPct.toFixed(0)}%`;
+      barAdapt.style.width = `${adaptPct.toFixed(0)}%`;
+
+      if (barFcfsText) barFcfsText.textContent = `${rep.fcfs_avg_load_ms.toFixed(0)} ms (Stalled in Queue)`;
+      if (barAdaptText) barAdaptText.textContent = `${rep.adaptive_avg_load_ms.toFixed(0)} ms (${loadDiff > 0 ? loadDiff.toFixed(0) + '% Faster Preemption' : 'Adaptive Duration'})`;
+
+      if (chartFcfsNote) {
+        chartFcfsNote.textContent = rep.fcfs_avg_load_ms > rep.adaptive_avg_load_ms ? 'Stalled in Queue (Head-of-Line Blocking)' : 'Baseline Execution';
+      }
+      if (chartAdaptNote) {
+        chartAdaptNote.textContent = loadDiff > 0 ? `${loadDiff.toFixed(0)}% Faster (Preempted Background Threads)` : 'Adaptive Execution';
+      }
+    } else if (rep.has_fcfs) {
+      barFcfs.style.width = '100%';
+      if (barFcfsText) barFcfsText.textContent = `${rep.fcfs_avg_load_ms.toFixed(0)} ms (FCFS Baseline Recorded)`;
+      barAdapt.style.width = '0%';
+      if (barAdaptText) barAdaptText.textContent = 'Awaiting Adaptive Run...';
+    } else if (rep.has_adaptive) {
+      barAdapt.style.width = '100%';
+      if (barAdaptText) barAdaptText.textContent = `${rep.adaptive_avg_load_ms.toFixed(0)} ms (Adaptive Run Recorded)`;
+      barFcfs.style.width = '0%';
+      if (barFcfsText) barFcfsText.textContent = 'Awaiting FCFS Run...';
     }
   }
 

@@ -245,6 +245,36 @@
           </div>
         </div>
 
+        <!-- Visual Gantt-Style Bar Comparison (Makes difference unmistakable) -->
+        <div class="rb-chart-card" id="rb-chart-card" style="margin: 16px 0;">
+          <div style="font-size: 13px; font-weight: 700; margin-bottom: 12px; color: #f8fafc; display: flex; justify-content: space-between; align-items: center;">
+            <span>Visual Execution Timeline &amp; Queue Delay</span>
+            <span style="font-size: 11px; color: #94a3b8; font-weight: 400;">Bar length represents measured tab completion latency</span>
+          </div>
+          <div class="rb-chart-row">
+            <div class="rb-chart-label">
+              <span style="color: #f59e0b; font-weight: 700;">Policy A: FCFS Baseline</span>
+              <span style="font-size: 11px; color: #94a3b8;" id="rb-chart-fcfs-note">Stalled in Queue (Head-of-Line Blocking)</span>
+            </div>
+            <div class="rb-bar-track">
+              <div class="rb-bar-fill rb-bar-fcfs" id="rb-bar-fcfs" style="width: 100%;">
+                <span id="rb-bar-fcfs-text">-- ms</span>
+              </div>
+            </div>
+          </div>
+          <div class="rb-chart-row" style="margin-top: 12px;">
+            <div class="rb-chart-label">
+              <span style="color: #38bdf8; font-weight: 700;">Policy B: Adaptive Priority</span>
+              <span style="font-size: 11px; color: #34d399;" id="rb-chart-adapt-note">Immediate Preemption (Zero Queue Wait)</span>
+            </div>
+            <div class="rb-bar-track">
+              <div class="rb-bar-fill rb-bar-adapt" id="rb-bar-adapt" style="width: 0%;">
+                <span id="rb-bar-adapt-text">-- ms</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="rb-academic-box">
           <div style="font-weight: 800; margin-bottom: 4px; color: #34d399;">🎓 Academic OS Finding &amp; Professor Summary:</div>
           <p id="rb-conclusion-text">
