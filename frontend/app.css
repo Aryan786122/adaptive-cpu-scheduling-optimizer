@@ -2355,4 +2355,526 @@ body {
   line-height: 1.5;
 }
 
+/* ==========================================================================
+   EXPERIMENT MODE SELECTOR NAVIGATION
+   ========================================================================== */
+.experiment-mode-nav {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 6px;
+}
+
+.mode-nav-btn {
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-lg);
+  padding: 14px 18px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: relative;
+  outline: none;
+}
+
+.mode-nav-btn:hover {
+  background: var(--bg-card-hover);
+  border-color: rgba(56, 189, 248, 0.4);
+}
+
+.mode-nav-btn.active {
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95));
+  border: 2px solid #38bdf8;
+  box-shadow: 0 4px 20px rgba(56, 189, 248, 0.15);
+}
+
+.mode-badge {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  width: fit-content;
+}
+
+.badge-primary {
+  background: rgba(56, 189, 248, 0.2);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.4);
+}
+
+.badge-secondary {
+  background: rgba(168, 85, 247, 0.2);
+  color: #c084fc;
+  border: 1px solid rgba(168, 85, 247, 0.4);
+}
+
+.mode-content-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.mode-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.mode-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.mode-desc {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+
+/* ==========================================================================
+   EXPERIMENT 1: REAL BROWSER CONTENTION WORKLOAD
+   ========================================================================== */
+.experiment-view {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.rb-hero-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-lg);
+  padding: 18px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.rb-hero-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.rb-hero-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: #f8fafc;
+}
+
+.rb-hero-subtitle {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-top: 4px;
+  line-height: 1.5;
+}
+
+.rb-env-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.rb-chip {
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.rb-chip-label {
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.rb-chip-val {
+  color: #f8fafc;
+  font-weight: 700;
+}
+
+.rb-controls-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-lg);
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.rb-controls-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.rb-select-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rb-select-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #94a3b8;
+}
+
+.rb-select-input {
+  background: var(--bg-input);
+  border: 1px solid var(--border-card);
+  color: #f8fafc;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+  outline: none;
+}
+
+.rb-btn-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn-rb-fcfs {
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid #f59e0b;
+  color: #f59e0b;
+  padding: 10px 18px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-rb-fcfs:hover:not(:disabled) {
+  background: #f59e0b;
+  color: #000;
+}
+
+.btn-rb-adapt {
+  background: rgba(56, 189, 248, 0.15);
+  border: 1px solid #38bdf8;
+  color: #38bdf8;
+  padding: 10px 18px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-rb-adapt:hover:not(:disabled) {
+  background: #38bdf8;
+  color: #000;
+}
+
+.btn-rb-cancel {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid #ef4444;
+  color: #ef4444;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-rb-cancel:hover:not(:disabled) {
+  background: #ef4444;
+  color: #fff;
+}
+
+.btn-rb-fcfs:disabled, .btn-rb-adapt:disabled, .btn-rb-cancel:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.rb-status-banner {
+  background: rgba(30, 41, 59, 0.5);
+  border-left: 4px solid #38bdf8;
+  padding: 10px 14px;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  font-size: 12px;
+  color: #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.rb-grid-2col {
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 900px) {
+  .rb-grid-2col {
+    grid-template-columns: 1fr;
+  }
+}
+
+.rb-side-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.rb-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rb-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: 8px;
+}
+
+.rb-card-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.rb-badge {
+  font-size: 10px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.rb-badge-normal {
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+  border: 1px solid #f59e0b;
+}
+
+.rb-badge-lowest {
+  background: rgba(56, 189, 248, 0.2);
+  color: #38bdf8;
+  border: 1px solid #38bdf8;
+}
+
+.rb-badge-boost {
+  background: rgba(234, 179, 8, 0.25);
+  color: #facc15;
+  border: 1px solid #facc15;
+  animation: pulse-border 1s infinite alternate;
+}
+
+@keyframes pulse-border {
+  from { border-color: #facc15; }
+  to { border-color: #ef4444; }
+}
+
+.rb-stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  padding: 4px 0;
+}
+
+.rb-stat-label {
+  color: #94a3b8;
+}
+
+.rb-stat-val {
+  color: #f8fafc;
+  font-weight: 700;
+}
+
+.rb-tabs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.rb-tab-card {
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+
+.rb-tab-card.loaded {
+  border-color: rgba(52, 211, 153, 0.5);
+  background: rgba(16, 185, 129, 0.05);
+}
+
+.rb-tab-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.rb-tab-num {
+  font-size: 12px;
+  font-weight: 800;
+  color: #f8fafc;
+}
+
+.rb-tab-status {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.rb-tab-status.pending {
+  background: rgba(148, 163, 184, 0.2);
+  color: #94a3b8;
+}
+
+.rb-tab-status.done {
+  background: rgba(52, 211, 153, 0.2);
+  color: #34d399;
+}
+
+.rb-tab-metrics-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+}
+
+.rb-tab-metric-row {
+  display: flex;
+  justify-content: space-between;
+}
+
+.rb-tab-metric-name {
+  color: #94a3b8;
+}
+
+.rb-tab-metric-val {
+  font-weight: 700;
+  color: #38bdf8;
+}
+
+/* Comparison Report */
+.rb-comparison-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.rb-comp-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 768px) {
+  .rb-comp-metrics-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.rb-comp-metric-card {
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rb-comp-metric-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+}
+
+.rb-comp-vals-row {
+  display: flex;
+  justify-content: center;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.rb-comp-fcfs-val {
+  font-size: 15px;
+  color: #f59e0b;
+  font-weight: 700;
+}
+
+.rb-comp-arrow {
+  color: #64748b;
+  font-size: 14px;
+}
+
+.rb-comp-adapt-val {
+  font-size: 22px;
+  color: #38bdf8;
+  font-weight: 800;
+}
+
+.rb-diff-badge {
+  font-size: 12px;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 6px;
+  width: fit-content;
+  margin: 0 auto;
+}
+
+.rb-diff-good {
+  background: rgba(52, 211, 153, 0.2);
+  color: #34d399;
+  border: 1px solid #34d399;
+}
+
+.rb-diff-overhead {
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+  border: 1px solid #f59e0b;
+}
+
+.rb-academic-box {
+  background: rgba(30, 41, 59, 0.7);
+  border-left: 4px solid #10b981;
+  padding: 14px 18px;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #f1f5f9;
+}
+
 

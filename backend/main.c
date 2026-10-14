@@ -8,6 +8,7 @@
 #include "calibration.h"
 #include "experiment_runner.h"
 #include "http_server.h"
+#include "real_browser_benchmark.h"
 
 static HANDLE s_hJob = NULL;
 
@@ -17,6 +18,7 @@ static BOOL WINAPI ConsoleCtrlHandler(DWORD fdwCtrlType) {
         case CTRL_BREAK_EVENT:
         case CTRL_CLOSE_EVENT:
             printf("\n[System] Shutdown signal received. Stopping experiment and server...\n");
+            real_browser_cancel();
             experiment_cancel();
             http_server_stop();
             return TRUE;
@@ -80,6 +82,7 @@ int main(int argc, char* argv[]) {
 
     // Initialize telemetry
     telemetry_init();
+    real_browser_bench_init();
 
     SystemTelemetry t;
     telemetry_get(&t);

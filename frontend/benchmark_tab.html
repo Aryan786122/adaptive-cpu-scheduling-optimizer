@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Real Browser Benchmark Tab | OS Contention Test</title>
+  <style>
+    :root {
+      --bg: #090d16;
+      --card-bg: #111827;
+      --border: rgba(56, 189, 248, 0.25);
+      --text: #f8fafc;
+      --text-dim: #94a3b8;
+      --accent: #38bdf8;
+      --success: #34d399;
+      --warning: #f59e0b;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      padding: 24px;
+      overflow-x: hidden;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    .header {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    }
+    .tag {
+      font-size: 11px;
+      font-weight: 800;
+      padding: 4px 10px;
+      border-radius: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .tag-fcfs { background: rgba(245, 158, 11, 0.2); color: var(--warning); border: 1px solid var(--warning); }
+    .tag-adapt { background: rgba(56, 189, 248, 0.2); color: var(--accent); border: 1px solid var(--accent); }
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .metric-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      text-align: center;
+    }
+    .metric-label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; font-weight: 700; }
+    .metric-val { font-size: 28px; font-weight: 800; color: var(--accent); margin-top: 6px; }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--success);
+      background: rgba(52, 211, 153, 0.15);
+      border: 1px solid var(--success);
+      padding: 6px 14px;
+      border-radius: 8px;
+      margin-top: 10px;
+    }
+    .canvas-wrap {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+    canvas { width: 100%; height: 120px; border-radius: 6px; }
+    .dom-workload-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 8px;
+      max-height: 260px;
+      overflow-y: auto;
+      padding: 12px;
+      background: #0d1322;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+    }
+    .work-item {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 6px;
+      padding: 8px;
+      font-size: 11px;
+      text-align: center;
+    }
+    .item-hash { font-family: monospace; font-size: 9px; color: var(--text-dim); margin-top: 4px; overflow: hidden; text-overflow: ellipsis; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div>
+        <h1 style="font-size: 18px; font-weight: 800;" id="tab-title">Benchmark Tab Loading...</h1>
+        <p style="font-size: 12px; color: var(--text-dim); margin-top: 4px;">
+          Executing real browser rendering and JavaScript execution under active CPU contention.
+        </p>
+      </div>
+      <div>
+        <span class="tag" id="policy-tag">Evaluating</span>
+      </div>
+    </div>
+
+    <!-- Live Performance Metrics -->
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <div class="metric-label">Page Load Latency</div>
+        <div class="metric-val" id="metric-load">-- ms</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">DOM &amp; Layout Duration</div>
+        <div class="metric-val" id="metric-dom">-- ms</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Event Loop Latency</div>
+        <div class="metric-val" id="metric-event">-- ms</div>
+      </div>
+    </div>
+
+    <!-- Telemetry Status Banner -->
+    <div style="text-align: center; margin-bottom: 20px;">
+      <div class="status-badge" id="reporting-badge">
+        <span>⚡</span> Measuring initial render &amp; event responsiveness...
+      </div>
+    </div>
+
+    <!-- Real Canvas Rendering Workload -->
+    <div class="canvas-wrap">
+      <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 8px; text-align: left; font-weight: 700;">
+        Canvas GPU/CPU Rasterizer Workload:
+      </div>
+      <canvas id="bench-canvas"></canvas>
+    </div>
+
+    <!-- Generated DOM Tree -->
+    <div style="font-size: 12px; font-weight: 700; margin-bottom: 8px; color: var(--text-dim);">
+      Rendered DOM Elements (1,200 Interactive Nodes):
+    </div>
+    <div class="dom-workload-grid" id="dom-grid"></div>
+  </div>
+
+  <script>
+    const t_start = performance.now();
+    const params = new URLSearchParams(window.location.search);
+    const tabId = parseInt(params.get('tab') || '1', 10);
+    const policy = (params.get('policy') || 'fcfs').toLowerCase();
+
+    document.getElementById('tab-title').textContent = `Benchmark Tab #${tabId} of 10`;
+    const tag = document.getElementById('policy-tag');
+    if (policy === 'adaptive') {
+      tag.className = 'tag tag-adapt';
+      tag.textContent = 'Policy: Adaptive Priority';
+    } else {
+      tag.className = 'tag tag-fcfs';
+      tag.textContent = 'Policy: FCFS Baseline';
+    }
+
+    // 1. Perform Genuine Intensive DOM Creation Workload (1,200 styled nodes + math hashing)
+    const grid = document.getElementById('dom-grid');
+    const t_dom_start = performance.now();
+    let fragment = document.createDocumentFragment();
+
+    for (let i = 0; i < 1200; i++) {
+      const div = document.createElement('div');
+      div.className = 'work-item';
+      // Compute mathematical hash
+      let h = (i * 2654435761) ^ (tabId * 1013904223);
+      h = ((h >>> 16) ^ h) * 0x45d9f3b;
+      h = ((h >>> 16) ^ h) * 0x45d9f3b;
+      h = (h >>> 16) ^ h;
+      div.innerHTML = `<strong>Item #${i + 1}</strong><div class="item-hash">0x${(h >>> 0).toString(16).padStart(8, '0')}</div>`;
+      fragment.appendChild(div);
+    }
+    grid.appendChild(fragment);
+    const dom_render_ms = performance.now() - t_dom_start;
+
+    // 2. Perform Canvas Rendering Workload
+    const canvas = document.getElementById('bench-canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = 800;
+    canvas.height = 120;
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(0, 0, 800, 120);
+
+    for (let x = 0; x < 800; x += 4) {
+      const y = 60 + Math.sin((x + tabId * 50) * 0.05) * 35 + Math.cos(x * 0.02) * 15;
+      ctx.fillStyle = policy === 'adaptive' ? '#38bdf8' : '#f59e0b';
+      ctx.fillRect(x, y, 3, 3);
+    }
+
+    // 3. Measure Main-Thread Event Loop & Responsiveness Latency
+    const t_event_dispatch = performance.now();
+    setTimeout(() => {
+      const event_latency_ms = performance.now() - t_event_dispatch;
+      const total_load_ms = performance.now() - t_start;
+
+      document.getElementById('metric-load').textContent = `${total_load_ms.toFixed(1)} ms`;
+      document.getElementById('metric-dom').textContent = `${dom_render_ms.toFixed(1)} ms`;
+      document.getElementById('metric-event').textContent = `${event_latency_ms.toFixed(1)} ms`;
+
+      // 4. Report Telemetry back to Native C Backend
+      reportMetrics(total_load_ms, dom_render_ms, event_latency_ms);
+    }, 10);
+
+    function reportMetrics(loadMs, domMs, eventMs) {
+      const payload = {
+        tab_id: tabId,
+        policy: policy,
+        nav_load_ms: loadMs,
+        dom_render_ms: domMs,
+        event_latency_ms: eventMs,
+        url: window.location.href
+      };
+
+      fetch('/api/real_browser/report_tab', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+      .then(res => res.json())
+      .then(data => {
+        const badge = document.getElementById('reporting-badge');
+        badge.innerHTML = `<span>✔</span> Measured &amp; Reported to Scheduler (Tab #${tabId}: ${loadMs.toFixed(1)}ms load, ${eventMs.toFixed(1)}ms event latency)`;
+      })
+      .catch(err => {
+        const badge = document.getElementById('reporting-badge');
+        badge.style.color = '#f87171';
+        badge.innerHTML = `<span>⚠</span> Telemetry recorded locally (${loadMs.toFixed(1)}ms).`;
+      });
+    }
+  </script>
+</body>
+</html>

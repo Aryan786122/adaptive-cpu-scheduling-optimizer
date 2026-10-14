@@ -21,6 +21,7 @@ gcc -O2 -Wall -Wextra -std=c99 -D_WIN32_WINNT=0x0601 ^
     backend\scheduler_fcfs.c ^
     backend\scheduler_adaptive.c ^
     backend\experiment_runner.c ^
+    backend\real_browser_benchmark.c ^
     backend\http_server.c ^
     backend\json_builder.c ^
     -o adaptive_scheduler.exe ^

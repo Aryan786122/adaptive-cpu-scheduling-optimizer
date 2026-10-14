@@ -27,6 +27,240 @@
     </header>
 
     <!-- ================================================================= -->
+    <!-- TOP-LEVEL EXPERIMENT SELECTOR                                      -->
+    <!-- ================================================================= -->
+    <nav class="experiment-mode-nav" aria-label="Experiment Selection">
+      <button class="mode-nav-btn active" id="btn-mode-exp1" onclick="switchExperimentMode('browser')">
+        <span class="mode-badge badge-primary">PROFESSOR DEMO</span>
+        <div class="mode-content-row">
+          <span class="mode-icon">🌐</span>
+          <div class="mode-text">
+            <div class="mode-title">Experiment 1: Real Browser &amp; Workload Contention Benchmark</div>
+            <div class="mode-desc">Live Windows Chrome / Edge 10-Tab Contention Test vs 8 Cryptographic Background Threads &bull; FCFS vs Adaptive Priority + Aging</div>
+          </div>
+        </div>
+      </button>
+
+      <button class="mode-nav-btn" id="btn-mode-exp2" onclick="switchExperimentMode('lab')">
+        <span class="mode-badge badge-secondary">OS THEORY LAB</span>
+        <div class="mode-content-row">
+          <span class="mode-icon">🎓</span>
+          <div class="mode-text">
+            <div class="mode-title">Experiment 2: OS Scheduling Theory Laboratory (4-Stage Guided)</div>
+            <div class="mode-desc">Interactive Queue Preemption, Cooperative Yield Checkpoints &amp; Dynamic Aging Visualizer (B1/B2/I1 Controlled Tasks)</div>
+          </div>
+        </div>
+      </button>
+    </nav>
+
+    <!-- ================================================================= -->
+    <!-- EXPERIMENT 1: REAL BROWSER & WORKLOAD CONTENTION                   -->
+    <!-- ================================================================= -->
+    <div id="view-experiment-1" class="experiment-view">
+      
+      <!-- Hero / Research Hypothesis Card -->
+      <div class="rb-hero-card">
+        <div class="rb-hero-top">
+          <div>
+            <div class="brand-badge" style="display: inline-block; margin-bottom: 6px;">Authentic Windows OS Experiment</div>
+            <h2 class="rb-hero-title">Real-World Browser Responsiveness Under Heavy CPU Contention</h2>
+            <p class="rb-hero-subtitle">
+              <strong>Research Problem:</strong> When heavy background computational threads saturate CPU execution cores, can dynamic priority modulation (yielding CPU quanta) with Starvation-Preventing Aging improve the responsiveness and page-load latency of real web browser tabs?
+            </p>
+          </div>
+          <div class="connection-pill" style="white-space: nowrap;">
+            <span class="status-pulse-dot"></span>
+            <span id="rb-detected-browser-pill">Detecting Browser...</span>
+          </div>
+        </div>
+
+        <div class="rb-env-chips">
+          <div class="rb-chip">
+            <span class="rb-chip-label">Target Browser:</span>
+            <span class="rb-chip-val" id="rb-target-browser-name">Chrome / Edge (Isolated Sandbox Profile)</span>
+          </div>
+          <div class="rb-chip">
+            <span class="rb-chip-label">Background Workload:</span>
+            <span class="rb-chip-val" id="rb-bg-threads-count-chip">8 Cryptographic Hashing Worker Threads</span>
+          </div>
+          <div class="rb-chip">
+            <span class="rb-chip-label">Contention Mechanism:</span>
+            <span class="rb-chip-val">Win32 SetThreadPriority (Normal vs Lowest + Aging Boost)</span>
+          </div>
+          <div class="rb-chip">
+            <span class="rb-chip-label">Profile Isolation:</span>
+            <span class="rb-chip-val">%TEMP%\sched_browser_test_* (User Profile Untouched)</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Execution Controls Dock -->
+      <div class="rb-controls-card">
+        <div class="rb-controls-row">
+          <div style="display: flex; gap: 14px; align-items: center; flex-wrap: wrap;">
+            <div class="rb-select-group">
+              <label for="rb-browser-select" class="rb-select-label">Browser:</label>
+              <select id="rb-browser-select" class="rb-select-input">
+                <option value="chrome">Google Chrome (Detected)</option>
+                <option value="edge">Microsoft Edge</option>
+              </select>
+            </div>
+
+            <div class="rb-select-group">
+              <label for="rb-workload-select" class="rb-select-label">Workload Type:</label>
+              <select id="rb-workload-select" class="rb-select-input">
+                <option value="offline">Offline Deterministic (10 Tabs: Canvas + 1,200 DOM Nodes + Hashes)</option>
+                <option value="online">Online Web Workload (10 Tabs: External Web Requests)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="rb-btn-group">
+            <button class="btn-rb-fcfs" id="rb-btn-fcfs" onclick="runRealBrowserBenchmark('fcfs')">
+              <span>▶ Run Policy A: FCFS Baseline</span>
+            </button>
+            <button class="btn-rb-adapt" id="rb-btn-adapt" onclick="runRealBrowserBenchmark('adaptive')">
+              <span>▶ Run Policy B: Adaptive Priority + Aging</span>
+            </button>
+            <button class="btn-rb-cancel" id="rb-btn-cancel" onclick="cancelRealBrowserBenchmark()" disabled>
+              <span>⏹ Cancel</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="rb-status-banner" id="rb-status-banner">
+          <span id="rb-status-msg">Select a policy and click Run to start the live browser contention test.</span>
+          <span id="rb-live-timer" style="font-weight: 700; color: #38bdf8;">0.0 ms</span>
+        </div>
+      </div>
+
+      <!-- Live Contention & Execution Inspection Grid -->
+      <div class="rb-grid-2col">
+        
+        <!-- Left Side: Background Worker & Priority Inspector -->
+        <div class="rb-side-panel">
+          <div class="rb-card">
+            <div class="rb-card-header">
+              <span class="rb-card-title">Background Worker Thread State</span>
+              <span class="rb-badge rb-badge-normal" id="rb-bg-priority-badge">THREAD_PRIORITY_NORMAL (8)</span>
+            </div>
+            
+            <div class="rb-stat-row">
+              <span class="rb-stat-label">Active Worker Threads:</span>
+              <span class="rb-stat-val" id="rb-bg-threads-val">8 Concurrent Threads</span>
+            </div>
+            <div class="rb-stat-row">
+              <span class="rb-stat-label">Cryptographic Hashes Computed:</span>
+              <span class="rb-stat-val" id="rb-bg-hashes-val">0 rounds</span>
+            </div>
+            <div class="rb-stat-row">
+              <span class="rb-stat-label">Background Execution Makespan:</span>
+              <span class="rb-stat-val" id="rb-bg-duration-val">0.0 ms</span>
+            </div>
+            <div class="rb-stat-row">
+              <span class="rb-stat-label">Contention Impact on Host:</span>
+              <span class="rb-stat-val" style="color: #f59e0b;">Saturates Multiple Logical Processors</span>
+            </div>
+          </div>
+
+          <!-- Dynamic Priority & Aging Transitions Log -->
+          <div class="rb-card">
+            <div class="rb-card-header">
+              <span class="rb-card-title">Priority &amp; Aging Transitions Watchdog</span>
+              <span style="font-size: 11px; color: #94a3b8;" id="rb-transitions-count">0 logged</span>
+            </div>
+            <div style="max-height: 220px; overflow-y: auto;">
+              <table class="transitions-table" style="font-size: 11px;">
+                <thead>
+                  <tr>
+                    <th>Time</th>
+                    <th>Priority</th>
+                    <th>Scheduler Trigger / Reason</th>
+                  </tr>
+                </thead>
+                <tbody id="rb-transitions-tbody">
+                  <tr><td colspan="3" style="text-align: center; color: #94a3b8; padding: 12px;">Waiting for benchmark execution...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Side: 10 Real Browser Tabs Progress Grid -->
+        <div class="rb-card">
+          <div class="rb-card-header">
+            <span class="rb-card-title">Real Browser Tabs Telemetry (10 Concurrent Instances)</span>
+            <span style="font-size: 11px; font-weight: 700; color: #34d399;" id="rb-tabs-reported-summary">0 / 10 Reported</span>
+          </div>
+
+          <div class="rb-tabs-grid" id="rb-tabs-grid">
+            <!-- 10 Tab Cards generated dynamically -->
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Comparative Results & Academic Findings Card -->
+      <div class="rb-comparison-card" id="rb-comparison-card" style="display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-subtle); padding-bottom: 10px;">
+          <div>
+            <h3 style="font-size: 16px; font-weight: 800; color: #f8fafc;">Comparative Results: FCFS vs Adaptive Priority</h3>
+            <p style="font-size: 11px; color: #94a3b8; margin-top: 2px;">Empirical metrics measured using real browser Navigation Timing &amp; Event Loop Latency APIs.</p>
+          </div>
+          <div class="rb-diff-badge rb-diff-good" id="rb-verdict-badge">Significant Responsiveness Gain</div>
+        </div>
+
+        <div class="rb-comp-metrics-grid">
+          <!-- Metric 1: Tab Page Load Time -->
+          <div class="rb-comp-metric-card">
+            <div class="rb-comp-metric-label">Average Page Load Time</div>
+            <div class="rb-comp-vals-row">
+              <span class="rb-comp-fcfs-val" id="rb-fcfs-load-val">-- ms (FCFS)</span>
+              <span class="rb-comp-arrow">&rarr;</span>
+              <span class="rb-comp-adapt-val" id="rb-adapt-load-val">-- ms (Adaptive)</span>
+            </div>
+            <div class="rb-diff-badge rb-diff-good" id="rb-diff-load-badge">--% Faster</div>
+          </div>
+
+          <!-- Metric 2: Event Loop Latency -->
+          <div class="rb-comp-metric-card">
+            <div class="rb-comp-metric-label">Main-Thread Event Loop Latency</div>
+            <div class="rb-comp-vals-row">
+              <span class="rb-comp-fcfs-val" id="rb-fcfs-event-val">-- ms (FCFS)</span>
+              <span class="rb-comp-arrow">&rarr;</span>
+              <span class="rb-comp-adapt-val" id="rb-adapt-event-val">-- ms (Adaptive)</span>
+            </div>
+            <div class="rb-diff-badge rb-diff-good" id="rb-diff-event-badge">--% Reduced Delay</div>
+          </div>
+
+          <!-- Metric 3: Background Worker Makespan -->
+          <div class="rb-comp-metric-card">
+            <div class="rb-comp-metric-label">Background Hashing Duration (Makespan)</div>
+            <div class="rb-comp-vals-row">
+              <span class="rb-comp-fcfs-val" id="rb-fcfs-bg-val">-- ms (FCFS)</span>
+              <span class="rb-comp-arrow">&rarr;</span>
+              <span class="rb-comp-adapt-val" id="rb-adapt-bg-val">-- ms (Adaptive)</span>
+            </div>
+            <div class="rb-diff-badge rb-diff-overhead" id="rb-diff-bg-badge">+--% Trade-Off Overhead</div>
+          </div>
+        </div>
+
+        <div class="rb-academic-box">
+          <div style="font-weight: 800; margin-bottom: 4px; color: #34d399;">🎓 Academic OS Finding &amp; Professor Summary:</div>
+          <p id="rb-conclusion-text">
+            Under FCFS, heavy background threads occupy normal Windows scheduling quanta, forcing browser rendering and event dispatch threads to queue up for CPU time slices. Under Adaptive Priority Scheduling, background threads are demoted during browser activity to immediately yield execution quanta to the browser. The Starvation Watchdog periodically boosts background threads (Dynamic Aging), guaranteeing background progress while slashing browser latency.
+          </p>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- EXPERIMENT 2: OS SCHEDULING THEORY LABORATORY (4-STAGE GUIDED)   -->
+    <!-- ================================================================= -->
+    <div id="view-experiment-2" class="experiment-view" style="display: none;">
+
+    <!-- ================================================================= -->
     <!-- STAGE 1: OBSERVE REAL SYSTEM ACTIVITY                             -->
     <!-- ================================================================= -->
     <section class="stage-section" id="stage-1">
@@ -670,6 +904,7 @@
       </details>
 
     </section>
+    </div> <!-- end view-experiment-2 -->
 
     <!-- App Footer -->
     <footer class="app-footer">

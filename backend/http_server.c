@@ -1,6 +1,7 @@
 #include "http_server.h"
 #include "system_telemetry.h"
 #include "experiment_runner.h"
+#include "real_browser_benchmark.h"
 #include "json_builder.h"
 
 #include <stdio.h>
@@ -448,6 +449,162 @@ static void handle_api_experiment_cancel(SOCKET sock) {
     send_response(sock, 200, "application/json", resp, strlen(resp));
 }
 
+static void handle_api_real_browser_detect(SOCKET sock) {
+    DetectedBrowser chrome, edge;
+    real_browser_detect_browsers(&chrome, &edge);
+
+    JsonBuilder jb;
+    json_init(&jb, 1024);
+    json_raw(&jb, "{");
+    json_raw(&jb, "\"chrome\":{");
+    json_bool(&jb, "available", chrome.is_available); json_raw(&jb, ",");
+    json_str(&jb, "name", chrome.name); json_raw(&jb, ",");
+    json_str(&jb, "path", chrome.exe_path);
+    json_raw(&jb, "},");
+    json_raw(&jb, "\"edge\":{");
+    json_bool(&jb, "available", edge.is_available); json_raw(&jb, ",");
+    json_str(&jb, "name", edge.name); json_raw(&jb, ",");
+    json_str(&jb, "path", edge.exe_path);
+    json_raw(&jb, "}}");
+
+    send_response(sock, 200, "application/json", jb.data, jb.length);
+    json_free(&jb);
+}
+
+static void handle_api_real_browser_start(SOCKET sock, const char* body) {
+    char policy[32] = "fcfs";
+    char workload[32] = "offline";
+    char browser[32] = "chrome";
+    int tabs = 10;
+
+    if (body) {
+        const char* p_pol = strstr(body, "\"policy\":");
+        if (p_pol) sscanf(p_pol + 9, " \"%31[^\"]\"", policy);
+
+        const char* p_work = strstr(body, "\"workload\":");
+        if (p_work) sscanf(p_work + 11, " \"%31[^\"]\"", workload);
+
+        const char* p_br = strstr(body, "\"browser\":");
+        if (p_br) sscanf(p_br + 10, " \"%31[^\"]\"", browser);
+
+        const char* p_tabs = strstr(body, "\"tabs\":");
+        if (p_tabs) sscanf(p_tabs + 7, "%d", &tabs);
+    }
+
+    if (real_browser_start_benchmark(policy, workload, browser, tabs)) {
+        char resp[256];
+        snprintf(resp, sizeof(resp), "{\"status\":\"started\",\"policy\":\"%s\",\"tabs\":%d}", policy, tabs);
+        send_response(sock, 200, "application/json", resp, strlen(resp));
+    } else {
+        const char* resp = "{\"status\":\"busy\",\"message\":\"A browser benchmark is already running.\"}";
+        send_response(sock, 400, "application/json", resp, strlen(resp));
+    }
+}
+
+static void handle_api_real_browser_report_tab(SOCKET sock, const char* body) {
+    int tab_id = 1;
+    char policy[32] = "fcfs";
+    double nav_load_ms = 0.0;
+    double dom_render_ms = 0.0;
+    double event_latency_ms = 0.0;
+    char url[256] = "";
+
+    if (body) {
+        const char* p_id = strstr(body, "\"tab_id\":");
+        if (p_id) sscanf(p_id + 9, "%d", &tab_id);
+
+        const char* p_pol = strstr(body, "\"policy\":");
+        if (p_pol) sscanf(p_pol + 9, " \"%31[^\"]\"", policy);
+
+        const char* p_load = strstr(body, "\"nav_load_ms\":");
+        if (p_load) sscanf(p_load + 14, "%lf", &nav_load_ms);
+
+        const char* p_dom = strstr(body, "\"dom_render_ms\":");
+        if (p_dom) sscanf(p_dom + 16, "%lf", &dom_render_ms);
+
+        const char* p_evt = strstr(body, "\"event_latency_ms\":");
+        if (p_evt) sscanf(p_evt + 19, "%lf", &event_latency_ms);
+
+        const char* p_url = strstr(body, "\"url\":");
+        if (p_url) sscanf(p_url + 6, " \"%255[^\"]\"", url);
+    }
+
+    real_browser_record_tab_metric(tab_id, policy, nav_load_ms, dom_render_ms, event_latency_ms, url);
+    const char* resp = "{\"status\":\"recorded\"}";
+    send_response(sock, 200, "application/json", resp, strlen(resp));
+}
+
+static void handle_api_real_browser_status(SOCKET sock) {
+    RealBrowserRunResult cur;
+    RealBrowserComparisonReport rep;
+    real_browser_get_status(&cur, &rep);
+
+    JsonBuilder jb;
+    json_init(&jb, 8192);
+    json_raw(&jb, "{");
+
+    // Current run state
+    json_int(&jb, "state", (int)cur.state); json_raw(&jb, ",");
+    json_str(&jb, "policy", cur.current_policy); json_raw(&jb, ",");
+    json_str(&jb, "workload", cur.workload_type); json_raw(&jb, ",");
+    json_int(&jb, "target_tabs", cur.target_tab_count); json_raw(&jb, ",");
+    json_int(&jb, "reported_tabs", cur.reported_tab_count); json_raw(&jb, ",");
+    json_double(&jb, "avg_nav_load_ms", cur.avg_nav_load_ms, 1); json_raw(&jb, ",");
+    json_double(&jb, "avg_event_latency_ms", cur.avg_event_latency_ms, 1); json_raw(&jb, ",");
+    json_bool(&jb, "bg_work_active", cur.bg_work_active); json_raw(&jb, ",");
+    json_int(&jb, "bg_thread_count", cur.bg_thread_count); json_raw(&jb, ",");
+    json_str(&jb, "bg_priority_label", cur.bg_priority_label); json_raw(&jb, ",");
+    json_double(&jb, "bg_work_duration_ms", cur.bg_work_duration_ms, 1); json_raw(&jb, ",");
+    json_double(&jb, "elapsed_ms", cur.bench_elapsed_ms, 1); json_raw(&jb, ",");
+    json_str(&jb, "status_message", cur.status_message); json_raw(&jb, ",");
+
+    // Tab metrics list
+    json_raw(&jb, "\"tabs\":[");
+    for (int i = 0; i < cur.reported_tab_count; i++) {
+        if (i > 0) json_raw(&jb, ",");
+        json_printf(&jb, "{\"id\":%d,\"load_ms\":%.1f,\"dom_ms\":%.1f,\"event_ms\":%.1f}",
+                    cur.tab_metrics[i].tab_id, cur.tab_metrics[i].nav_load_ms,
+                    cur.tab_metrics[i].dom_render_ms, cur.tab_metrics[i].event_latency_ms);
+    }
+    json_raw(&jb, "],");
+
+    // Transitions
+    json_raw(&jb, "\"transitions\":[");
+    for (int i = 0; i < cur.transition_count; i++) {
+        if (i > 0) json_raw(&jb, ",");
+        char esc[128];
+        json_escape(cur.transitions[i].trigger, esc, sizeof(esc));
+        json_printf(&jb, "{\"t\":%.1f,\"old_pri\":%d,\"new_pri\":%d,\"trigger\":\"%s\"}",
+                    cur.transitions[i].t_ms, cur.transitions[i].old_pri, cur.transitions[i].new_pri, esc);
+    }
+    json_raw(&jb, "],");
+
+    // Comparison report
+    json_raw(&jb, "\"report\":{");
+    json_bool(&jb, "has_fcfs", rep.has_fcfs); json_raw(&jb, ",");
+    json_bool(&jb, "has_adaptive", rep.has_adaptive); json_raw(&jb, ",");
+    json_double(&jb, "fcfs_avg_load_ms", rep.fcfs_result.avg_nav_load_ms, 1); json_raw(&jb, ",");
+    json_double(&jb, "adaptive_avg_load_ms", rep.adaptive_result.avg_nav_load_ms, 1); json_raw(&jb, ",");
+    json_double(&jb, "fcfs_avg_event_ms", rep.fcfs_result.avg_event_latency_ms, 1); json_raw(&jb, ",");
+    json_double(&jb, "adaptive_avg_event_ms", rep.adaptive_result.avg_event_latency_ms, 1); json_raw(&jb, ",");
+    json_double(&jb, "fcfs_bg_duration_ms", rep.fcfs_result.bg_work_duration_ms, 1); json_raw(&jb, ",");
+    json_double(&jb, "adaptive_bg_duration_ms", rep.adaptive_result.bg_work_duration_ms, 1); json_raw(&jb, ",");
+    json_double(&jb, "load_improvement_pct", rep.load_improvement_pct, 1); json_raw(&jb, ",");
+    json_double(&jb, "latency_improvement_pct", rep.latency_improvement_pct, 1); json_raw(&jb, ",");
+    json_double(&jb, "bg_overhead_pct", rep.bg_overhead_pct, 1); json_raw(&jb, ",");
+    json_str(&jb, "empirical_conclusion", rep.empirical_conclusion);
+    json_raw(&jb, "}}");
+
+    send_response(sock, 200, "application/json", jb.data, jb.length);
+    json_free(&jb);
+}
+
+static void handle_api_real_browser_cancel(SOCKET sock) {
+    real_browser_cancel();
+    const char* resp = "{\"status\":\"cancelled\"}";
+    send_response(sock, 200, "application/json", resp, strlen(resp));
+}
+
 static DWORD WINAPI client_handler_thread(LPVOID lpParam) {
     SOCKET client = (SOCKET)lpParam;
     char buf[4096];
@@ -510,6 +667,8 @@ static DWORD WINAPI client_handler_thread(LPVOID lpParam) {
         serve_file(client, "app.css", "text/css");
     } else if (strcmp(path, "/app.js") == 0) {
         serve_file(client, "app.js", "application/javascript");
+    } else if (strncmp(path, "/benchmark_tab.html", 19) == 0) {
+        serve_file(client, "benchmark_tab.html", "text/html; charset=utf-8");
     } else if (strcmp(path, "/api/telemetry") == 0) {
         handle_api_telemetry(client);
     } else if (strcmp(path, "/api/telemetry/capture") == 0) {
@@ -530,6 +689,16 @@ static DWORD WINAPI client_handler_thread(LPVOID lpParam) {
         handle_api_experiment_run(client, body);
     } else if (strcmp(path, "/api/experiment/cancel") == 0) {
         handle_api_experiment_cancel(client);
+    } else if (strcmp(path, "/api/real_browser/detect") == 0) {
+        handle_api_real_browser_detect(client);
+    } else if (strcmp(path, "/api/real_browser/start") == 0) {
+        handle_api_real_browser_start(client, body);
+    } else if (strcmp(path, "/api/real_browser/report_tab") == 0) {
+        handle_api_real_browser_report_tab(client, body);
+    } else if (strcmp(path, "/api/real_browser/status") == 0) {
+        handle_api_real_browser_status(client);
+    } else if (strcmp(path, "/api/real_browser/cancel") == 0) {
+        handle_api_real_browser_cancel(client);
     } else {
         const char* nf = "404 Not Found";
         send_response(client, 404, "text/plain", nf, strlen(nf));

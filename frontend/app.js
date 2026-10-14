@@ -1186,6 +1186,346 @@ function setReplaySpeed(spd, btnEl) {
   if (btnEl) btnEl.classList.add('active');
 }
 
+// =============================================================================
+// EXPERIMENT 1: REAL BROWSER CONTENTION BENCHMARK CONTROLLER
+// =============================================================================
+let realBrowserPollTimer = null;
+let realBrowserRunning = false;
+let realBrowserTargetTabs = 10;
+let realBrowserCurrentPolicy = 'fcfs';
+
+function switchExperimentMode(mode) {
+  const btnExp1 = document.getElementById('btn-mode-exp1');
+  const btnExp2 = document.getElementById('btn-mode-exp2');
+  const viewExp1 = document.getElementById('view-experiment-1');
+  const viewExp2 = document.getElementById('view-experiment-2');
+
+  if (mode === 'browser') {
+    if (btnExp1) btnExp1.classList.add('active');
+    if (btnExp2) btnExp2.classList.remove('active');
+    if (viewExp1) viewExp1.style.display = 'flex';
+    if (viewExp2) viewExp2.style.display = 'none';
+  } else {
+    if (btnExp1) btnExp1.classList.remove('active');
+    if (btnExp2) btnExp2.classList.add('active');
+    if (viewExp1) viewExp1.style.display = 'none';
+    if (viewExp2) viewExp2.style.display = 'flex';
+  }
+}
+
+async function detectRealBrowsers() {
+  try {
+    const res = await fetch('/api/real_browser/detect');
+    if (!res.ok) return;
+    const data = await res.json();
+
+    const pill = document.getElementById('rb-detected-browser-pill');
+    const targetName = document.getElementById('rb-target-browser-name');
+    const select = document.getElementById('rb-browser-select');
+
+    if (select) {
+      select.innerHTML = '';
+      if (data.chrome && data.chrome.available) {
+        const opt = document.createElement('option');
+        opt.value = 'chrome';
+        opt.textContent = `Google Chrome (Detected at ${data.chrome.path ? data.chrome.path.substring(0, 30) + '...' : 'Program Files'})`;
+        select.appendChild(opt);
+      }
+      if (data.edge && data.edge.available) {
+        const opt = document.createElement('option');
+        opt.value = 'edge';
+        opt.textContent = `Microsoft Edge (Detected at ${data.edge.path ? data.edge.path.substring(0, 30) + '...' : 'Program Files'})`;
+        select.appendChild(opt);
+      }
+    }
+
+    if (data.chrome && data.chrome.available) {
+      if (pill) pill.textContent = '✔ Google Chrome Detected';
+      if (targetName) targetName.textContent = 'Google Chrome (Isolated Sandbox Instance)';
+    } else if (data.edge && data.edge.available) {
+      if (pill) pill.textContent = '✔ Microsoft Edge Detected';
+      if (targetName) targetName.textContent = 'Microsoft Edge (Isolated Sandbox Instance)';
+    } else {
+      if (pill) {
+        pill.textContent = '⚠ Standard Browser Mode';
+        pill.style.color = '#f59e0b';
+      }
+    }
+  } catch (err) {
+    console.warn('Real browser detection failed:', err);
+  }
+}
+
+function initRealBrowserTabsGrid(count = 10) {
+  const grid = document.getElementById('rb-tabs-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
+
+  for (let i = 1; i <= count; i++) {
+    const card = document.createElement('div');
+    card.className = 'rb-tab-card';
+    card.id = `rb-tab-card-${i}`;
+    card.innerHTML = `
+      <div class="rb-tab-header">
+        <span class="rb-tab-num">Tab #${i}</span>
+        <span class="rb-tab-status pending" id="rb-tab-status-${i}">Pending</span>
+      </div>
+      <div class="rb-tab-metrics-list">
+        <div class="rb-tab-metric-row">
+          <span class="rb-tab-metric-name">Load Latency:</span>
+          <span class="rb-tab-metric-val" id="rb-tab-load-${i}">-- ms</span>
+        </div>
+        <div class="rb-tab-metric-row">
+          <span class="rb-tab-metric-name">DOM / Layout:</span>
+          <span class="rb-tab-metric-val" id="rb-tab-dom-${i}">-- ms</span>
+        </div>
+        <div class="rb-tab-metric-row">
+          <span class="rb-tab-metric-name">Event Latency:</span>
+          <span class="rb-tab-metric-val" id="rb-tab-event-${i}">-- ms</span>
+        </div>
+      </div>
+    `;
+    grid.appendChild(card);
+  }
+}
+
+async function runRealBrowserBenchmark(policy) {
+  if (realBrowserRunning) return;
+
+  const browserChoice = document.getElementById('rb-browser-select')?.value || 'chrome';
+  const workloadChoice = document.getElementById('rb-workload-select')?.value || 'offline';
+  realBrowserCurrentPolicy = policy;
+  realBrowserRunning = true;
+
+  // Reset UI
+  initRealBrowserTabsGrid(10);
+  const btnFcfs = document.getElementById('rb-btn-fcfs');
+  const btnAdapt = document.getElementById('rb-btn-adapt');
+  const btnCancel = document.getElementById('rb-btn-cancel');
+  if (btnFcfs) btnFcfs.disabled = true;
+  if (btnAdapt) btnAdapt.disabled = true;
+  if (btnCancel) btnCancel.disabled = false;
+
+  const statusMsg = document.getElementById('rb-status-msg');
+  if (statusMsg) {
+    statusMsg.textContent = `Starting ${policy === 'adaptive' ? 'Adaptive Priority + Aging' : 'FCFS Baseline'} test. Spawning 8 background worker threads and launching real browser instance...`;
+  }
+
+  const badge = document.getElementById('rb-bg-priority-badge');
+  if (badge) {
+    if (policy === 'adaptive') {
+      badge.className = 'rb-badge rb-badge-lowest';
+      badge.textContent = 'THREAD_PRIORITY_LOWEST (Priority 4)';
+    } else {
+      badge.className = 'rb-badge rb-badge-normal';
+      badge.textContent = 'THREAD_PRIORITY_NORMAL (Priority 8)';
+    }
+  }
+
+  const tbody = document.getElementById('rb-transitions-tbody');
+  if (tbody) {
+    tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: #38bdf8; padding: 10px;">Initializing benchmark &amp; dispatching threads...</td></tr>`;
+  }
+
+  try {
+    const res = await fetch('/api/real_browser/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        policy: policy,
+        workload: workloadChoice,
+        browser: browserChoice,
+        tabs: 10
+      })
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.message || 'Server returned error');
+    }
+
+    // Start status polling
+    if (realBrowserPollTimer) clearInterval(realBrowserPollTimer);
+    realBrowserPollTimer = setInterval(pollRealBrowserStatus, 150);
+
+  } catch (err) {
+    alert('Failed to start real browser benchmark: ' + err.message);
+    resetRealBrowserControls();
+  }
+}
+
+async function pollRealBrowserStatus() {
+  try {
+    const res = await fetch('/api/real_browser/status');
+    if (!res.ok) return;
+    const data = await res.json();
+
+    // Elapsed Timer
+    const timerEl = document.getElementById('rb-live-timer');
+    if (timerEl) timerEl.textContent = `${(data.elapsed_ms || 0).toFixed(0)} ms`;
+
+    // Status Message
+    const msgEl = document.getElementById('rb-status-msg');
+    if (msgEl && data.status_message) msgEl.textContent = data.status_message;
+
+    // Background Worker State
+    const threadsEl = document.getElementById('rb-bg-threads-val');
+    if (threadsEl) threadsEl.textContent = `${data.bg_thread_count || 8} Concurrent Threads`;
+
+    const durEl = document.getElementById('rb-bg-duration-val');
+    if (durEl) durEl.textContent = `${(data.bg_work_duration_ms || data.elapsed_ms || 0).toFixed(1)} ms`;
+
+    const badge = document.getElementById('rb-bg-priority-badge');
+    if (badge && data.bg_priority_label) {
+      badge.textContent = data.bg_priority_label;
+      if (data.bg_priority_label.includes('Aged Boost') || data.bg_priority_label.includes('BOOST')) {
+        badge.className = 'rb-badge rb-badge-boost';
+      } else if (data.bg_priority_label.includes('LOWEST')) {
+        badge.className = 'rb-badge rb-badge-lowest';
+      } else {
+        badge.className = 'rb-badge rb-badge-normal';
+      }
+    }
+
+    // Tabs Progress Grid
+    if (data.tabs && Array.isArray(data.tabs)) {
+      const countEl = document.getElementById('rb-tabs-reported-summary');
+      if (countEl) countEl.textContent = `${data.tabs.length} / ${data.target_tabs || 10} Reported`;
+
+      data.tabs.forEach(t => {
+        const card = document.getElementById(`rb-tab-card-${t.id}`);
+        const status = document.getElementById(`rb-tab-status-${t.id}`);
+        const load = document.getElementById(`rb-tab-load-${t.id}`);
+        const dom = document.getElementById(`rb-tab-dom-${t.id}`);
+        const evt = document.getElementById(`rb-tab-event-${t.id}`);
+
+        if (card) card.classList.add('loaded');
+        if (status) {
+          status.className = 'rb-tab-status done';
+          status.textContent = '✔ Rendered';
+        }
+        if (load) load.textContent = `${t.load_ms.toFixed(1)} ms`;
+        if (dom) dom.textContent = `${t.dom_ms.toFixed(1)} ms`;
+        if (evt) evt.textContent = `${t.event_ms.toFixed(1)} ms`;
+      });
+    }
+
+    // Transitions Log
+    if (data.transitions && Array.isArray(data.transitions)) {
+      const tbody = document.getElementById('rb-transitions-tbody');
+      const countEl = document.getElementById('rb-transitions-count');
+      if (countEl) countEl.textContent = `${data.transitions.length} logged`;
+
+      if (tbody && data.transitions.length > 0) {
+        tbody.innerHTML = '';
+        data.transitions.forEach(tr => {
+          const row = document.createElement('tr');
+          const priLabel = tr.new_pri === -2 ? 'LOWEST (4)' : (tr.new_pri === 0 ? 'NORMAL (8)' : `Pri ${tr.new_pri}`);
+          const priColor = tr.new_pri === -2 ? '#38bdf8' : (tr.trigger.includes('Aging') ? '#facc15' : '#f59e0b');
+          row.innerHTML = `
+            <td style="font-family: monospace; color: #94a3b8;">+${tr.t.toFixed(0)}ms</td>
+            <td><strong style="color: ${priColor};">${priLabel}</strong></td>
+            <td style="font-size: 11px;">${tr.trigger}</td>
+          `;
+          tbody.appendChild(row);
+        });
+      }
+    }
+
+    // Check if run completed or cancelled
+    if (data.state === 2 || data.state === 3) {
+      clearInterval(realBrowserPollTimer);
+      realBrowserPollTimer = null;
+      resetRealBrowserControls();
+
+      // Render comparative report
+      if (data.report) {
+        renderRealBrowserReport(data.report);
+      }
+    }
+
+  } catch (err) {
+    console.warn('Real browser poll error:', err);
+  }
+}
+
+function renderRealBrowserReport(rep) {
+  const card = document.getElementById('rb-comparison-card');
+  if (!card) return;
+  card.style.display = 'flex';
+
+  // Load Time
+  const fcfsLoad = document.getElementById('rb-fcfs-load-val');
+  const adaptLoad = document.getElementById('rb-adapt-load-val');
+  const diffLoad = document.getElementById('rb-diff-load-badge');
+  if (fcfsLoad) fcfsLoad.textContent = rep.has_fcfs ? `${rep.fcfs_avg_load_ms.toFixed(1)} ms (FCFS)` : '-- ms (FCFS)';
+  if (adaptLoad) adaptLoad.textContent = rep.has_adaptive ? `${rep.adaptive_avg_load_ms.toFixed(1)} ms (Adaptive)` : '-- ms (Adaptive)';
+  if (diffLoad) {
+    if (rep.has_fcfs && rep.has_adaptive) {
+      diffLoad.textContent = `${rep.load_improvement_pct.toFixed(1)}% Faster Load`;
+    } else {
+      diffLoad.textContent = rep.has_fcfs ? 'FCFS Baseline Recorded' : 'Adaptive Run Recorded';
+    }
+  }
+
+  // Event Latency
+  const fcfsEvt = document.getElementById('rb-fcfs-event-val');
+  const adaptEvt = document.getElementById('rb-adapt-event-val');
+  const diffEvt = document.getElementById('rb-diff-event-badge');
+  if (fcfsEvt) fcfsEvt.textContent = rep.has_fcfs ? `${rep.fcfs_avg_event_ms.toFixed(1)} ms (FCFS)` : '-- ms (FCFS)';
+  if (adaptEvt) adaptEvt.textContent = rep.has_adaptive ? `${rep.adaptive_avg_event_ms.toFixed(1)} ms (Adaptive)` : '-- ms (Adaptive)';
+  if (diffEvt) {
+    if (rep.has_fcfs && rep.has_adaptive) {
+      diffEvt.textContent = `${rep.latency_improvement_pct.toFixed(1)}% Lower Event Delay`;
+    } else {
+      diffEvt.textContent = 'Run other policy to compare';
+    }
+  }
+
+  // Background Makespan
+  const fcfsBg = document.getElementById('rb-fcfs-bg-val');
+  const adaptBg = document.getElementById('rb-adapt-bg-val');
+  const diffBg = document.getElementById('rb-diff-bg-badge');
+  if (fcfsBg) fcfsBg.textContent = rep.has_fcfs ? `${rep.fcfs_bg_duration_ms.toFixed(1)} ms (FCFS)` : '-- ms (FCFS)';
+  if (adaptBg) adaptBg.textContent = rep.has_adaptive ? `${rep.adaptive_bg_duration_ms.toFixed(1)} ms (Adaptive)` : '-- ms (Adaptive)';
+  if (diffBg) {
+    if (rep.has_fcfs && rep.has_adaptive) {
+      const sign = rep.bg_overhead_pct >= 0 ? '+' : '';
+      diffBg.textContent = `${sign}${rep.bg_overhead_pct.toFixed(1)}% Makespan Trade-Off`;
+    } else {
+      diffBg.textContent = 'Duration Tracked';
+    }
+  }
+
+  // Empirical Conclusion
+  const conc = document.getElementById('rb-conclusion-text');
+  if (conc && rep.empirical_conclusion && rep.empirical_conclusion.length > 0) {
+    conc.textContent = rep.empirical_conclusion;
+  }
+}
+
+async function cancelRealBrowserBenchmark() {
+  try {
+    await fetch('/api/real_browser/cancel', { method: 'POST' });
+  } catch (err) {
+    console.warn('Cancel request error:', err);
+  }
+  if (realBrowserPollTimer) clearInterval(realBrowserPollTimer);
+  realBrowserPollTimer = null;
+  resetRealBrowserControls();
+  const statusMsg = document.getElementById('rb-status-msg');
+  if (statusMsg) statusMsg.textContent = 'Benchmark cancelled by user.';
+}
+
+function resetRealBrowserControls() {
+  realBrowserRunning = false;
+  const btnFcfs = document.getElementById('rb-btn-fcfs');
+  const btnAdapt = document.getElementById('rb-btn-adapt');
+  const btnCancel = document.getElementById('rb-btn-cancel');
+  if (btnFcfs) btnFcfs.disabled = false;
+  if (btnAdapt) btnAdapt.disabled = false;
+  if (btnCancel) btnCancel.disabled = true;
+}
+
 // -----------------------------------------------------------------------------
 // INITIALIZATION
 // -----------------------------------------------------------------------------
@@ -1193,5 +1533,7 @@ window.addEventListener('DOMContentLoaded', () => {
   pollTelemetry();
   telemPollTimer = setInterval(pollTelemetry, 1000);
   prepareActiveWorkload();
+  detectRealBrowsers();
+  initRealBrowserTabsGrid(10);
 });
 
