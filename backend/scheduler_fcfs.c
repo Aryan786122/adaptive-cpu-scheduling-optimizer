@@ -108,6 +108,7 @@ BOOL run_fcfs_benchmark(WorkloadBatch* batch, DWORD_PTR affinity_mask, Algorithm
         if (injection_slot && InterlockedCompareExchange(&injection_slot->requested, 0, 1) == 1) {
             int new_id = workload_inject_interactive_task(batch, elapsed_ms, injection_slot->name);
             if (new_id > 0) {
+                out->task_count = batch->task_count;
                 int idx = batch->task_count - 1;
                 ManagedWorker* iw = &out->workers[idx];
                 iw->def = batch->tasks[idx];
@@ -203,6 +204,7 @@ BOOL run_fcfs_benchmark(WorkloadBatch* batch, DWORD_PTR affinity_mask, Algorithm
             if (injection_slot && InterlockedCompareExchange(&injection_slot->requested, 0, 1) == 1) {
                 int new_id = workload_inject_interactive_task(batch, elapsed_ms, injection_slot->name);
                 if (new_id > 0) {
+                    out->task_count = batch->task_count;
                     int idx = batch->task_count - 1;
                     ManagedWorker* iw = &out->workers[idx];
                     iw->def = batch->tasks[idx];

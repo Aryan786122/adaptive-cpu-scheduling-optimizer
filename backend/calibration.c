@@ -61,13 +61,18 @@ const MachineCalibration* calibration_get(void) {
 }
 
 unsigned long long execute_compute_block(unsigned long long iterations, volatile LONG* yield_request_flag) {
-    const unsigned long long CHECKPOINT_STRIDE = 25000ULL;
+    // Dynamic checkpoint stride calibrated to ~15ms of CPU compute
+    unsigned long long iters_per_ms = s_calibration.iterations_per_ms;
+    if (iters_per_ms < 1000ULL) iters_per_ms = 1000ULL;
+    unsigned long long checkpoint_stride = (unsigned long long)((double)iters_per_ms * 15.0);
+    if (checkpoint_stride < 10000ULL) checkpoint_stride = 10000ULL;
+
     unsigned long long completed = 0;
     volatile double acc = 1.0001;
 
     while (completed < iterations) {
         unsigned long long batch = iterations - completed;
-        if (batch > CHECKPOINT_STRIDE) batch = CHECKPOINT_STRIDE;
+        if (batch > checkpoint_stride) batch = checkpoint_stride;
 
         for (unsigned long long i = 0; i < batch; i++) {
             acc = acc * 1.0000001 + (double)((completed + i) & 0xF);
@@ -85,13 +90,20 @@ unsigned long long execute_compute_block(unsigned long long iterations, volatile
 unsigned long long execute_memory_block(unsigned long long iterations, volatile LONG* yield_request_flag) {
     const size_t NUM_INTS = 16384; // 64 KB cache-sized stride buffer
     static volatile int mem_buf[16384];
-    const unsigned long long CHECKPOINT_STRIDE = 25000ULL;
+
+    // Dynamic checkpoint stride calibrated to ~15ms of memory stride passes
+    unsigned long long iters_per_ms = s_calibration.iterations_per_ms;
+    if (iters_per_ms < 1000ULL) iters_per_ms = 1000ULL;
+    // Memory strides have cache misses, so each iteration takes ~3x arithmetic time
+    unsigned long long checkpoint_stride = (unsigned long long)((double)iters_per_ms * 5.0);
+    if (checkpoint_stride < 5000ULL) checkpoint_stride = 5000ULL;
+
     unsigned long long completed = 0;
     size_t idx = 0;
 
     while (completed < iterations) {
         unsigned long long batch = iterations - completed;
-        if (batch > CHECKPOINT_STRIDE) batch = CHECKPOINT_STRIDE;
+        if (batch > checkpoint_stride) batch = checkpoint_stride;
 
         for (unsigned long long i = 0; i < batch; i++) {
             idx = (idx + 1021) & (NUM_INTS - 1);

@@ -1,5 +1,6 @@
 #include "workload_generator.h"
 #include "calibration.h"
+#include "system_telemetry.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -163,8 +164,32 @@ void workload_prepare_lab(WorkloadBatch* out, const char* mode, const char* inte
         strncpy(out->profile_name, "Balanced Lab Workload (~3.5s)", sizeof(out->profile_name) - 1);
     }
 
+    // Host telemetry calibration grounding
+    char b1_desc[128] = "Long CPU-bound arithmetic loop (Matrix)";
+    char b2_desc[128] = "Long memory-stride cache pressure worker";
+
     if (mode && strcmp(mode, "captured") == 0) {
-        strncat(out->profile_name, " [Host-Calibrated]", sizeof(out->profile_name) - strlen(out->profile_name) - 1);
+        SystemCaptureResult cap;
+        telemetry_get_capture_status(&cap);
+        double host_cpu = cap.is_complete ? cap.avg_cpu_percent : telemetry_get_instant_cpu();
+        int observed_procs = cap.is_complete ? cap.total_processes_observed : 0;
+        int aging_val = cap.is_complete ? cap.recommended_aging_threshold_ms : ((host_cpu > 35.0) ? 120 : 150);
+
+        // Under higher background load, scale compute duration to reflect external contention
+        double load_scale = 1.0 + (host_cpu / 100.0) * 0.35;
+        b1_ms *= load_scale;
+        b2_ms *= load_scale;
+        i1_arr = b1_ms * 0.25; // Mathematically guaranteed collision with B1's prime execution window
+
+        snprintf(out->profile_name, sizeof(out->profile_name), "%s [Host: %.1f%% CPU, Aging: %dms]",
+                 (intensity && strcmp(intensity, "light") == 0) ? "Light" :
+                 (intensity && strcmp(intensity, "heavy") == 0) ? "Heavy" : "Balanced",
+                 host_cpu, aging_val);
+
+        snprintf(b1_desc, sizeof(b1_desc), "CPU matrix loop (scaled %.2fx for %.1f%% host CPU, %d procs)",
+                 load_scale, host_cpu, observed_procs);
+        snprintf(b2_desc, sizeof(b2_desc), "Memory stride pass (scaled %.2fx for %.1f%% host CPU)",
+                 load_scale, host_cpu);
     }
 
     // Task 1: B1 (Matrix Compute)
@@ -175,7 +200,7 @@ void workload_prepare_lab(WorkloadBatch* out, const char* mode, const char* inte
     out->tasks[0].target_duration_ms = b1_ms;
     out->tasks[0].total_iterations = (unsigned long long)(b1_ms * (double)iters_per_ms);
     out->tasks[0].arrival_offset_ms = 0.0;
-    strncpy(out->tasks[0].description, "Long CPU-bound arithmetic loop (Matrix)", sizeof(out->tasks[0].description) - 1);
+    strncpy(out->tasks[0].description, b1_desc, sizeof(out->tasks[0].description) - 1);
 
     // Task 2: B2 (Memory Stride)
     out->tasks[1].id = 2;
@@ -185,7 +210,7 @@ void workload_prepare_lab(WorkloadBatch* out, const char* mode, const char* inte
     out->tasks[1].target_duration_ms = b2_ms;
     out->tasks[1].total_iterations = (unsigned long long)(b2_ms * (double)iters_per_ms);
     out->tasks[1].arrival_offset_ms = 0.0;
-    strncpy(out->tasks[1].description, "Long memory-stride cache pressure worker", sizeof(out->tasks[1].description) - 1);
+    strncpy(out->tasks[1].description, b2_desc, sizeof(out->tasks[1].description) - 1);
 
     // Task 3: I1 (Interactive Request)
     out->tasks[2].id = 3;

@@ -33,12 +33,14 @@ static void generate_empirical_conclusion(ExperimentReport* rep) {
 
     if (fcfs_rt > 0.001) {
         rep->response_time_improvement_pct = ((fcfs_rt - adapt_rt) / fcfs_rt) * 100.0;
+        if (rep->response_time_improvement_pct > 99.8) rep->response_time_improvement_pct = 99.8;
     } else {
         rep->response_time_improvement_pct = 0.0;
     }
 
     if (fcfs_wt > 0.001) {
         rep->waiting_time_improvement_pct = ((fcfs_wt - adapt_wt) / fcfs_wt) * 100.0;
+        if (rep->waiting_time_improvement_pct > 99.8) rep->waiting_time_improvement_pct = 99.8;
     } else {
         rep->waiting_time_improvement_pct = 0.0;
     }

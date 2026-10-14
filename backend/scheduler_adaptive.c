@@ -62,17 +62,24 @@ BOOL run_adaptive_benchmark(const WorkloadBatch* batch, DWORD_PTR affinity_mask,
     strncpy(out->algorithm_code, "ADAPTIVE", sizeof(out->algorithm_code) - 1);
     out->task_count = batch->task_count;
 
-    // Incorporate genuine host telemetry
+    // Incorporate genuine host telemetry & capture results
+    SystemCaptureResult cap;
+    telemetry_get_capture_status(&cap);
     double host_cpu = telemetry_get_instant_cpu();
     int aging_thresh = 150;
-    if (host_cpu > 50.0) {
-        aging_thresh = 120; // Accelerate aging under high system load
+
+    if (cap.is_complete && cap.recommended_aging_threshold_ms > 0) {
+        aging_thresh = cap.recommended_aging_threshold_ms;
+        host_cpu = cap.avg_cpu_percent;
+    } else if (host_cpu > 35.0) {
+        aging_thresh = 120; // Accelerate aging under elevated system load
     }
+
     if (out_ctx) {
         out_ctx->host_cpu_load_percent = host_cpu;
         out_ctx->aging_threshold_ms = aging_thresh;
         out_ctx->checkpoint_interval_ms = 15.0;
-        if (host_cpu > 50.0) {
+        if (aging_thresh <= 120) {
             snprintf(out_ctx->adaptive_reasoning, sizeof(out_ctx->adaptive_reasoning),
                      "Host CPU utilization is elevated (%.1f%%). Aging threshold set to %dms to accelerate background throughput while maintaining cooperative preemption for interactive bursts.",
                      host_cpu, aging_thresh);
@@ -159,8 +166,14 @@ BOOL run_adaptive_benchmark(const WorkloadBatch* batch, DWORD_PTR affinity_mask,
             ManagedWorker* w = &out->workers[ready_queue[k].worker_idx];
             double wait_duration = elapsed_ms - ready_queue[k].entered_ready_ms;
             int aging_bonus = (int)(wait_duration / (double)aging_thresh);
-            w->effective_priority = w->def.base_priority - aging_bonus;
-            if (w->effective_priority < 0) w->effective_priority = 0; // Clamped at 0 (maximum priority)
+            int new_pri = w->def.base_priority - aging_bonus;
+            if (new_pri < 0) new_pri = 0; // Clamped at 0 (maximum priority)
+            if (new_pri != w->effective_priority) {
+                char reason[64];
+                snprintf(reason, sizeof(reason), "Aging boost: Priority %d -> %d (waited %.0fms)", w->effective_priority, new_pri, wait_duration);
+                log_transition(out, elapsed_ms, w->def.id, w->def.name, STATE_READY, STATE_READY, reason);
+                w->effective_priority = new_pri;
+            }
         }
 
         // 3. Select best task: Lowest effective_priority number (highest priority)
